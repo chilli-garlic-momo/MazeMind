@@ -1,72 +1,84 @@
 // File: DacoitRoom2.cs
-// Now key-aware: if player arrives without the key, dacoit speaks "go find the key"
-// and the player is respawned to the Section 1.1 spawn point (assigned via Section15Director).
+// Key-aware dacoit used by Room 1 Section 1.5 and Room 2.
 using TMPro;
 using UnityEngine;
 using MazeMind.Core;
 
 public class DacoitRoom2 : MonoBehaviour
 {
-    [Header("Runtime demand (set by Section15Director from AIDirector)")]
+    [Header("Runtime demand (set by Section15Director / Room2 manager)")]
     public int gemDemand;
 
     [Header("UI")]
-    public TMP_Text demandLabel;   // world-space TMP floating above dacoit
+    public TMP_Text demandLabel;
 
-    [Header("No-key behaviour (set by Section15Director)")]
-    public Transform respawnIfNoKey;       // Spawn_1_1 transform
-    public string    respawnSectionId = "1.1";
-    public float     respawnDelay = 1.5f;
+    [Header("No-key behaviour (Room 1 only)")]
+    public Transform respawnIfNoKey;
+    public string respawnSectionId = "1.1";
+    public float respawnDelay = 1.5f;
 
     bool _paid;
     bool _respawningNoKey;
 
+    void Awake()
+    {
+        GameManager.EnsureExists();
+        AutoFindRespawnTargetIfNeeded();
+    }
+
     void Start()
     {
-        // If anyone else set demand already, keep it. Otherwise fall back.
         if (gemDemand <= 0) gemDemand = Room2DifficultyManager.GetDacoitDemand();
         RefreshLabel();
     }
 
-    public void SetDemand(int d) { gemDemand = d; RefreshLabel(); }
+    public void SetDemand(int d)
+    {
+        gemDemand = Mathf.Max(0, d);
+        RefreshLabel();
+    }
 
-    void RefreshLabel() => SetDemandLabel($"Bring me {gemDemand} gems.");
+    void RefreshLabel()
+    {
+        if (gemDemand <= 0) SetDemandLabel("Show me the key.");
+        else SetDemandLabel($"Bring me {gemDemand} gems.");
+    }
 
     void OnTriggerEnter(Collider other)
     {
         if (_paid || _respawningNoKey || !other.CompareTag("Player")) return;
 
-        // 1. No key? Send them back to 1.1.
-        if (GameManager.Instance != null && !GameManager.Instance.hasKey)
+        var gm = GameManager.EnsureExists();
+
+        if (!gm.hasKey)
         {
             _respawningNoKey = true;
             SetDemandLabel("Go find the key first.");
             DecisionLogger.I?.Log("DacoitNoKey", "1.5", "DacoitBlocked",
                 "Go find the key first.",
-                "Player reached dacoit without the key. Respawning at 1.1.");
+                "Player reached dacoit without the key. Respawning at Room 1 start.");
             StartCoroutine(RespawnToStart(other.gameObject));
             return;
         }
 
-        // 2. Has key — check gems.
-        int have = GameManager.Instance != null ? GameManager.Instance.gems : 0;
-        int short_ = gemDemand - have;
+        int have = gm.gems;
+        int shortBy = Mathf.Max(0, gemDemand - have);
 
         if (have >= gemDemand)
         {
-            GameManager.Instance.gems -= gemDemand;
+            gm.SpendGems(gemDemand);
             _paid = true;
             SetDemandLabel("Accepted. Move along.");
             DecisionLogger.I?.Log("DacoitPaid", "1.5", "DacoitAccepted",
                 "Smart. You listened.",
-                $"Player paid {gemDemand} gems. Remaining: {GameManager.Instance.gems}");
+                $"Player paid {gemDemand} gems. Remaining: {gm.gems}");
             gameObject.SetActive(false);
         }
         else
         {
-            SetDemandLabel($"Not enough.\nYou are {short_} short.");
+            SetDemandLabel($"Not enough.\nYou are {shortBy} short.");
             DecisionLogger.I?.Log("DacoitBlocked", "1.5", "DacoitDenied",
-                $"You are {short_} short. The maze remembers.",
+                $"You are {shortBy} short. The maze remembers.",
                 $"Player has {have}, needs {gemDemand}. Blocked.");
         }
     }
@@ -74,6 +86,8 @@ public class DacoitRoom2 : MonoBehaviour
     System.Collections.IEnumerator RespawnToStart(GameObject player)
     {
         yield return new WaitForSeconds(respawnDelay);
+
+        AutoFindRespawnTargetIfNeeded(player);
 
         var hp = player.GetComponent<PlayerHealth>();
         var cc = player.GetComponent<CharacterController>();
@@ -88,11 +102,36 @@ public class DacoitRoom2 : MonoBehaviour
         }
         else
         {
-            Debug.LogWarning("[DacoitRoom2] respawnIfNoKey not assigned — cannot send player to 1.1.");
+            Debug.LogWarning("[DacoitRoom2] No respawn target found. Create Spawn_1_1 or assign respawnIfNoKey.");
         }
 
         _respawningNoKey = false;
         RefreshLabel();
+    }
+
+    void AutoFindRespawnTargetIfNeeded(GameObject player = null)
+    {
+        if (respawnIfNoKey != null) return;
+
+        string[] names = { "Spawn_1_1", "Spawn_Run", "Room1Start", "StartSpawn" };
+        foreach (var n in names)
+        {
+            var go = GameObject.Find(n);
+            if (go != null)
+            {
+                respawnIfNoKey = go.transform;
+                respawnSectionId = "1.1";
+                return;
+            }
+        }
+
+        if (player == null) player = GameObject.FindWithTag("Player");
+        var hp = player != null ? player.GetComponent<PlayerHealth>() : null;
+        if (hp != null && hp.fallbackSpawn != null)
+        {
+            respawnIfNoKey = hp.fallbackSpawn;
+            respawnSectionId = hp.fallbackSectionId;
+        }
     }
 
     void SetDemandLabel(string s)

@@ -16,6 +16,7 @@ namespace MazeMind.Core {
         public void RecomputeTags() {
             var m = PlayerMetrics.I; var s = state;
             s.activeTags.Clear();
+            if (m == null) return;
             if (m.avgMoveSpeed > 4f && m.explorationPct < 0.45f) s.activeTags.Add("Speedrunner");
             if (m.gemCollectionPct > 0.8f)                       s.activeTags.Add("Collector");
             if (m.avgHesitationSec > 3.5f && m.damageTaken < 30) s.activeTags.Add("Paranoid");
@@ -25,59 +26,51 @@ namespace MazeMind.Core {
         public void Fire(TriggerKind t, string sectionId, int roomId) {
             RecomputeTags();
             var m = PlayerMetrics.I;
+            if (m == null || state == null) return;
+
             var matched = rules
                 .Where(r => r != null && r.Matches(m, state, t, sectionId, roomId))
                 .OrderBy(r => r.priority).ToList();
             foreach (var r in matched) {
                 r.Apply(state);
-                DecisionLogger.I.Log(t.ToString(), sectionId, r.ruleName, r.playerLine, r.devLine);
+                DecisionLogger.I?.Log(t.ToString(), sectionId, r.ruleName, r.playerLine, r.devLine);
             }
         }
 
         // -------- Room 1 specific director calls --------
 
-        /// <summary>
-        /// Picks the Section 1.5 dacoit gem demand. Varies per-run, ramps up if the
-        /// player ignored gems (teach the lesson), ramps slightly for Collectors,
-        /// and is clamped to never be literally unwinnable given current gem count.
-        /// </summary>
         public int ComputeRoom1DacoitDemand() {
             var m = PlayerMetrics.I;
-            int baseDemand = Random.Range(6, 11); // 6..10
+            int baseDemand = Random.Range(3, 7); // 3..6 before adaptation
 
             float collected = m != null ? m.gemCollectionPct : 0f;
             string reason;
             if (collected < 0.3f) {
-                baseDemand += Random.Range(4, 8);
-                reason = $"Ignored gems ({collected:P0}) -> ramp demand";
+                baseDemand += Random.Range(1, 3);
+                reason = $"Ignored gems ({collected:P0}) -> mild ramp";
             } else if (collected > 0.85f) {
-                baseDemand += Random.Range(2, 5);
+                baseDemand += Random.Range(1, 3);
                 reason = $"Collector ({collected:P0}) -> mild ramp";
             } else {
                 reason = $"Balanced ({collected:P0}) -> base demand";
             }
 
-            int gemsNow = GameManager.Instance != null ? GameManager.Instance.gems : 0;
-            int hardCap = Mathf.Max(5, gemsNow + 6);
-            int demand  = Mathf.Clamp(baseDemand, 5, hardCap);
+            int gemsNow = GameManager.EnsureExists().gems;
+            int demand = Mathf.Clamp(baseDemand, 0, Mathf.Max(0, gemsNow));
 
             state.dacoitGemDemand = demand;
             DecisionLogger.I?.Log("Room1DacoitDemand", "1.5", "ComputeRoom1Demand",
-                $"The toll: {demand}.",
-                $"{reason}. demand={demand} (raw {baseDemand}, cap {hardCap}, has {gemsNow}).");
+                demand <= 0 ? "Show me the key." : $"The toll: {demand}.",
+                $"{reason}. demand={demand} (raw {baseDemand}, player has {gemsNow}).");
             return demand;
         }
 
-        /// <summary>
-        /// Picks where along the safe path Section 1.3's key should sit.
-        /// Friendlier players get the key early; collectors / clean runs get it deep.
-        /// </summary>
         public float ComputeRoom13KeyPathFraction() {
             var m = PlayerMetrics.I;
             float frac;
             if (m == null) frac = 0.5f;
-            else if (m.damageTaken > 60)         frac = 0.30f;  // struggling -> easy
-            else if (m.gemCollectionPct > 0.85f) frac = 0.80f;  // collector -> hard
+            else if (m.damageTaken > 60)         frac = 0.30f;
+            else if (m.gemCollectionPct > 0.85f) frac = 0.80f;
             else                                  frac = 0.55f + Random.Range(-0.1f, 0.15f);
 
             state.room13KeyPathFraction = Mathf.Clamp01(frac);
@@ -87,24 +80,18 @@ namespace MazeMind.Core {
             return state.room13KeyPathFraction;
         }
 
-        /// <summary>
-        /// Picks how much Section 1.2's second gap widens mid-jump.
-        /// </summary>
         public float ComputeRoom12Gap2Widen() {
             var m = PlayerMetrics.I;
             float w = 1.0f;
             if (m != null) {
-                if (m.gemCollectionPct < 0.3f) w = 0.85f;      // forgiving
-                else if (m.gemCollectionPct > 0.8f) w = 1.25f; // punishing
+                if (m.gemCollectionPct < 0.3f) w = 0.85f;
+                else if (m.gemCollectionPct > 0.8f) w = 1.25f;
                 else w = 1.0f + Random.Range(-0.05f, 0.1f);
             }
             state.room12Gap2WidenFactor = w;
             return w;
         }
 
-        /// <summary>
-        /// Picks Section 1.4 variant based on trapDensity.
-        /// </summary>
         public Section14Variant ComputeRoom14Variant() {
             float td = state.trapDensity;
             Section14Variant v;

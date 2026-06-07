@@ -1,4 +1,4 @@
-// File: ExitDoorRoom2.cs — REPLACE ENTIRE FILE
+// File: ExitDoorRoom2.cs
 using System.Collections;
 using UnityEngine;
 using MazeMind.Core;
@@ -8,20 +8,33 @@ public class ExitDoorRoom2 : MonoBehaviour
     public DacoitRoom2 dacoit;
     public string nextSceneName = "Room3";
 
-    [Header("Door swing — assign the SmallDoor child Transform")]
-    public Transform smallDoor;          // the door leaf that rotates
-    public float openAngle = 90f;        // Y degrees to rotate open
+    [Header("Door swing — assign the SmallDoor child Transform if you have one")]
+    public Transform smallDoor;
+    public float openAngle = 90f;
     public float openDuration = 0.5f;
 
     bool _opened;
-    // Add this field to ExitDoorRoom2
     bool _hadDummyKey;
+
+    void Awake()
+    {
+        GameManager.EnsureExists();
+        if (dacoit == null)
+        {
+#pragma warning disable 0618
+            dacoit = FindObjectOfType<DacoitRoom2>();
+#pragma warning restore 0618
+        }
+    }
+
     public void NotifyDummyKeyCollected() => _hadDummyKey = true;
+
     public void TryOpen()
     {
         if (_opened) return;
 
-        bool hasKey = GameManager.Instance.hasKey;
+        var gm = GameManager.EnsureExists();
+        bool hasKey = gm.hasKey;
         bool dacoitGone = dacoit == null || !dacoit.gameObject.activeSelf;
 
         if (!hasKey)
@@ -33,27 +46,30 @@ public class ExitDoorRoom2 : MonoBehaviour
                 ? "Player has dummy key, tried exit — redirected to spawn room."
                 : "Player has no key.";
             Log(msg, dev);
+            Debug.Log("[ExitDoorRoom2] Blocked: no key.");
             return;
         }
+
         if (!dacoitGone)
         {
-            Log($"You are {dacoit.gemDemand - GameManager.Instance.gems} short. The maze remembers.",
+            int shortBy = dacoit != null ? Mathf.Max(0, dacoit.gemDemand - gm.gems) : 0;
+            Log($"You are {shortBy} short. The maze remembers.",
                 "Player tried door — dacoit still blocking.");
+            Debug.Log("[ExitDoorRoom2] Blocked: dacoit has not accepted payment yet.");
             return;
         }
 
         _opened = true;
         AIDirector.I?.Fire(TriggerKind.OnSectionExit, "2.exit", 2);
-        GameManager.Instance.hasKey = false;
 
         DecisionLogger.I?.Log("RoomComplete", "2.exit", "RoomEnd",
             "Profile updated. Adaptation complete. Preparing next room.",
-            "Room 2 exit confirmed.");
+            $"Exit confirmed. Loading {nextSceneName}.");
 
-        if (smallDoor != null)
-            StartCoroutine(SwingOpen());
-        else
-            LoadNext();
+        gm.ResetForNextRoom();
+
+        if (smallDoor != null) StartCoroutine(SwingOpen());
+        else LoadNext();
     }
 
     IEnumerator SwingOpen()
@@ -72,10 +88,13 @@ public class ExitDoorRoom2 : MonoBehaviour
         LoadNext();
     }
 
-    void LoadNext() {
-    if (BetweenRoomManager.I != null) BetweenRoomManager.I.ShowScreen(nextSceneName);
-    else UnityEngine.SceneManagement.SceneManager.LoadScene(nextSceneName);
-}
+    void LoadNext()
+    {
+        if (string.IsNullOrEmpty(nextSceneName)) return;
+
+        if (BetweenRoomManager.I != null) BetweenRoomManager.I.ShowScreen(nextSceneName);
+        else UnityEngine.SceneManagement.SceneManager.LoadScene(nextSceneName);
+    }
 
     void Log(string player, string dev) =>
         DecisionLogger.I?.Log("ExitAttempt", "2.exit", "DoorBlocked", player, dev);

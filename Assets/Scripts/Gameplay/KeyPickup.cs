@@ -4,15 +4,12 @@ public class KeyPickup : MonoBehaviour
 {
     private void OnTriggerEnter(Collider other)
     {
-        Debug.Log("Touched by: "+other.name);
-        
-        if (other.CompareTag("Player"))
-        {
-            GameManager.Instance.hasKey = true;
+        Debug.Log("Touched by: " + other.name);
 
-            Debug.Log("Key Collected");
+        if (!other.CompareTag("Player")) return;
 
-            Destroy(gameObject);
-        }
+        GameManager.EnsureExists().CollectKey();
+        Debug.Log("Key Collected");
+        Destroy(gameObject);
     }
 }
