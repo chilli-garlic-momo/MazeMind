@@ -3,7 +3,7 @@ using UnityEngine; using MazeMind.Core;
 
 public class ExitDoorRoom2 : MonoBehaviour {
     public DacoitRoom2 dacoit;
-    public string nextSceneName = "Room3";
+    public string nextSceneName = "MainMenu";
 
     bool _opened;
 
@@ -29,7 +29,10 @@ public class ExitDoorRoom2 : MonoBehaviour {
         // Reset key for next room
         GameManager.Instance.hasKey = false;
 
-        BetweenRoomManager.I?.ShowScreen(nextSceneName);
+        if (BetweenRoomManager.I != null)
+            BetweenRoomManager.I.ShowScreen(nextSceneName);
+        else
+            UnityEngine.SceneManagement.SceneManager.LoadScene(nextSceneName);
     }
 
     // Wire this to a trigger collider or an interact button

@@ -4,10 +4,10 @@ using UnityEngine; using UnityEngine.SceneManagement;
 public class Bootstrap : MonoBehaviour {
     [Tooltip("Name of your persistent-managers scene (Boot).")]
     public string bootScene = "Boot";
-    public string firstRoom = "Room1";
+    public string firstRoom = "MainMenu";
 
     void Start() {
-        // If managers are already alive (scene reloaded), go straight to Room1
+        // If managers are already alive (scene reloaded), go straight to first room
         if (MazeMind.Core.AIDirector.I != null) {
             SceneManager.LoadScene(firstRoom);
             return;
