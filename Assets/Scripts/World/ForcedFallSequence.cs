@@ -3,12 +3,11 @@ using UnityEngine;
 using MazeMind.Core;
 
 /// <summary>
-/// "Forced fall" cinematic. Can be invoked two ways:
-///   1. As a trigger volume (legacy): player walks in -> Play() runs.
-///   2. Programmatically: Section12Director calls Play() when the
-///      player crosses the gap-3 fall trigger.
-/// On completion: fade-to-black, teleport player to respawnAt_1_5,
-/// fire AIDirector enter/exit events.
+/// "Forced fall" cinematic for Section 1.2 -> 1.5.
+/// v13: now guards the player with PlayerHealth.SetInvulnerable() for the
+/// entire fall + a grace window after the teleport, so the safety-net
+/// killBelowY check in PlayerHealth can't kill the player mid-fall and
+/// race-respawn them at the old (1.1) checkpoint.
 /// </summary>
 public class ForcedFallSequence : MonoBehaviour {
     public Transform respawnAt_1_5;
@@ -16,6 +15,8 @@ public class ForcedFallSequence : MonoBehaviour {
     public CanvasGroup fadeToBlack;
     public float fadeOutSeconds = 1.2f;
     public float fadeInSeconds  = 1.0f;
+    [Tooltip("Extra invulnerability after teleport so PlayerHealth doesn't kill the player on landing in 1.5.")]
+    public float postTeleportInvulnSeconds = 1.5f;
 
     bool _firing;
 
@@ -37,6 +38,11 @@ public class ForcedFallSequence : MonoBehaviour {
     }
 
     IEnumerator Run(Transform player) {
+        var hp = player.GetComponent<PlayerHealth>();
+
+        // Suppress safety-net killBelowY while the player is mid-cinematic.
+        if (hp != null) hp.SetInvulnerable(true);
+
         if (screamSfx != null) screamSfx.Play();
 
         float t = 0;
@@ -48,7 +54,6 @@ public class ForcedFallSequence : MonoBehaviour {
         if (fadeToBlack != null) fadeToBlack.alpha = 1f;
 
         if (respawnAt_1_5 != null) {
-            // CharacterController fights direct .position writes — disable for the teleport.
             var cc = player.GetComponent<CharacterController>();
             if (cc != null) cc.enabled = false;
             player.position = respawnAt_1_5.position;
@@ -59,7 +64,8 @@ public class ForcedFallSequence : MonoBehaviour {
         AIDirector.I?.Fire(TriggerKind.OnSectionExit,  "1.2", 1);
         AIDirector.I?.Fire(TriggerKind.OnSectionEnter, "1.5", 1);
 
-        var hp = player.GetComponent<PlayerHealth>();
+        // Register 1.5 checkpoint BEFORE clearing invuln so the relative
+        // killBelowY check (now in PlayerHealth) uses the new low Y as its baseline.
         if (hp != null && respawnAt_1_5 != null)
             hp.RegisterCheckpoint(respawnAt_1_5.position, "1.5");
 
@@ -70,6 +76,12 @@ public class ForcedFallSequence : MonoBehaviour {
             yield return null;
         }
         if (fadeToBlack != null) fadeToBlack.alpha = 0f;
+
+        // Grace period before re-enabling the safety net.
+        if (postTeleportInvulnSeconds > 0f)
+            yield return new WaitForSeconds(postTeleportInvulnSeconds);
+        if (hp != null) hp.SetInvulnerable(false);
+
         _firing = false;
     }
 }

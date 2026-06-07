@@ -14,8 +14,10 @@ public class PlayerHealth : MonoBehaviour {
     public string fallbackSectionId = "1.1";
 
     [Header("Safety net")]
-    [Tooltip("If the player ever falls below this Y, kill them. Catches missed PitDeathTrigger setups.")]
-    public float killBelowY = -15f;
+    [Tooltip("If the player ever falls more than this far BELOW the current checkpoint Y, kill them. " +
+             "Was an absolute world Y in earlier versions — now relative to the active checkpoint so " +
+             "sections built far below the maze (e.g. 1.5) don't false-trigger the kill.")]
+    public float killBelowOffsetFromCheckpoint = 20f;
 
     [System.Serializable] public class HealthEvent : UnityEvent<int,int> {}
     public HealthEvent OnHealthChanged;
@@ -27,11 +29,13 @@ public class PlayerHealth : MonoBehaviour {
     CharacterController _cc;
     MonoBehaviour _controller;
 
-    /// <summary>
-    /// True if the player should not take damage right now (post-respawn window,
-    /// currently dying, or already at 0 hp).
-    /// </summary>
     public bool IsInvuln => _invuln || _respawning || currentHealth <= 0;
+
+    /// <summary>
+    /// Public toggle so cinematic sequences (e.g. ForcedFallSequence) can suppress
+    /// the safety-net kill while the player is mid-fall / mid-teleport.
+    /// </summary>
+    public void SetInvulnerable(bool on) { _invuln = on; }
 
     void Awake() {
         currentHealth = maxHealth;
@@ -42,7 +46,10 @@ public class PlayerHealth : MonoBehaviour {
     }
 
     void Update() {
-        if (!_respawning && transform.position.y < killBelowY) {
+        // Skip safety-net kill if we're invuln, respawning, or already dead.
+        if (IsInvuln) return;
+        // Relative kill threshold — only fires if the player is way below their last checkpoint.
+        if (transform.position.y < _checkpointPos.y - killBelowOffsetFromCheckpoint) {
             Kill(_currentSectionId);
         }
     }
@@ -65,7 +72,6 @@ public class PlayerHealth : MonoBehaviour {
         OnHealthChanged?.Invoke(currentHealth, maxHealth);
     }
 
-    /// <summary>Instant death from a trap. Deduped against active respawn / invuln.</summary>
     public void Kill(string sectionId) {
         if (IsInvuln) return;
         currentHealth = 0;
@@ -93,7 +99,6 @@ public class PlayerHealth : MonoBehaviour {
         currentHealth = maxHealth;
         OnHealthChanged?.Invoke(currentHealth, maxHealth);
 
-        // Re-enable controller, then run an invuln window BEFORE clearing _respawning.
         _invuln = true;
         if (_controller != null) _controller.enabled = true;
         yield return new WaitForSeconds(invulnSecondsAfterRespawn);
