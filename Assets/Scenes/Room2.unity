@@ -6579,6 +6579,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4c826efc5dfec2046bae1cc9a16b280c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DoorInteractable
+  nextSceneName: Room2
+  useBetweenRoomScreen: 1
 --- !u!65 &1796597064
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -6936,11 +6938,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 91e1c66dff623ef4dbb37e7eec103e7c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerController
-  controller: {fileID: 1912584010}
   walkSpeed: 5
   sprintSpeed: 8
   jumpHeight: 1.5
+  doubleJumpHeight: 1
   gravity: -9.81
+  mouseSensitivity: 0.2
+  cameraRig: {fileID: 0}
+  controller: {fileID: 1912584010}
 --- !u!143 &1912584010
 CharacterController:
   m_ObjectHideFlags: 0

@@ -11,13 +11,14 @@ public class PlayerController : MonoBehaviour
     public float jumpHeight = 1.2f;
     public float doubleJumpHeight = 1.0f;
     public float gravity = -20f;
+    public float terminalVelocity = -50f;
 
     [Header("Mouse Look")]
     public float mouseSensitivity = 0.2f;
     public Transform cameraRig;
 
     [Header("References (optional)")]
-    public CharacterController controller;  // kept for compat — auto-assigned if null
+    public CharacterController controller;
 
     private Vector3 _velocity;
     private float _pitch = 0f;
@@ -45,7 +46,9 @@ public class PlayerController : MonoBehaviour
     {
         if (Mouse.current == null) return;
         var delta = Mouse.current.delta.ReadValue();
-        float yaw = delta.x * mouseSensitivity;
+        // Frame-rate independent look. Mouse delta is already per-frame pixels,
+        // but multiplying by a fixed sensitivity makes high-fps feel twitchy.
+        float yaw   = delta.x * mouseSensitivity;
         float pitch = delta.y * mouseSensitivity;
 
         transform.Rotate(0, yaw, 0);
@@ -62,8 +65,8 @@ public class PlayerController : MonoBehaviour
 
         float h = 0f, v = 0f;
         if (Keyboard.current.aKey.isPressed) h = -1f;
-        if (Keyboard.current.dKey.isPressed) h = 1f;
-        if (Keyboard.current.wKey.isPressed) v = 1f;
+        if (Keyboard.current.dKey.isPressed) h =  1f;
+        if (Keyboard.current.wKey.isPressed) v =  1f;
         if (Keyboard.current.sKey.isPressed) v = -1f;
 
         Vector3 move = transform.right * h + transform.forward * v;
@@ -76,16 +79,16 @@ public class PlayerController : MonoBehaviour
                 PlayerMetrics.I.Bind(transform);
         }
 
-        // Sprint with Shift
-        float currentSpeed = walkSpeed;
-        if (Keyboard.current.leftShiftKey.isPressed)
-            currentSpeed = sprintSpeed;
+        float currentSpeed = Keyboard.current.leftShiftKey.isPressed ? sprintSpeed : walkSpeed;
 
         if (controller.isGrounded)
         {
-            if (_velocity.y < 0) _velocity.y = -2f;
-            _canDoubleJump = false;
-            _usedDoubleJump = false;
+            // Always pin a small downward velocity while grounded — prevents
+            // the controller from registering false-positive "in air" frames
+            // which caused screen jitter and let the player fall through tiles.
+            _velocity.y = -2f;
+            _canDoubleJump   = false;
+            _usedDoubleJump  = false;
         }
 
         if (Keyboard.current.spaceKey.wasPressedThisFrame)
@@ -103,9 +106,13 @@ public class PlayerController : MonoBehaviour
         }
 
         _velocity.y += gravity * Time.deltaTime;
+        // Clamp terminal velocity — a single off-floor frame can no longer
+        // accumulate enough vertical speed to punch through a thin collider.
+        if (_velocity.y < terminalVelocity) _velocity.y = terminalVelocity;
+
         controller.Move((move * currentSpeed + _velocity) * Time.deltaTime);
     }
 
-    public bool IsInAir => !controller.isGrounded;
-    public Vector3 Velocity => _velocity;
+    public bool    IsInAir   => !controller.isGrounded;
+    public Vector3 Velocity  => _velocity;
 }

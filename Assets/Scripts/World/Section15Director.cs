@@ -1,20 +1,18 @@
-using System.Collections; using UnityEngine;
-
+using UnityEngine;
+using MazeMind.Core;
 public class Section15Director : MonoBehaviour {
-    public static Section15Director I;
-    public GameObject ghostPrefab;
-    public Transform ghostSpawn;
-    public Transform player;
 
-    void Awake() { I = this; }
+    [Header("Refs")]
+    public DacoitRoom2 dacoit;
+    public GameObject  keyObject;         // KeyPickup
+    public ExitDoorRoom2 exitDoor;        // door to next scene
 
-    public void StartGhostTimer(float sec) => StartCoroutine(Spawn(sec));
+    void Start() {
+        if (AIDirector.I != null && dacoit != null) {
+            int demand = AIDirector.I.ComputeRoom1DacoitDemand();
+            dacoit.SetDemand(demand);
+        }
 
-    IEnumerator Spawn(float sec) {
-        yield return new WaitForSeconds(sec);
-        if (ghostPrefab == null || ghostSpawn == null) yield break;
-        var g = Instantiate(ghostPrefab, ghostSpawn.position, Quaternion.identity);
-        var gc = g.GetComponent<GhostController>();
-        if (gc != null) gc.player = player;
+        if (keyObject != null && !keyObject.activeSelf) keyObject.SetActive(true);
     }
 }
