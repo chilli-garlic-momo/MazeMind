@@ -67,6 +67,6 @@
         "*.sln": "*.csproj",
         "*.slnx": "*.csproj"
     },
-    "dotnet.defaultSolution": "MazeMind_.slnx",
+    "dotnet.defaultSolution": "Mind Maze.slnx",
     "dotnet.enableWorkspaceBasedDevelopment": false
 }
