@@ -1,20 +1,22 @@
 // File: DummyKey.cs
-using UnityEngine; using MazeMind.Core;
+using UnityEngine;
+using MazeMind.Core;
 
 public class DummyKey : MonoBehaviour {
-    [Tooltip("Assign the RealKeyRelocator in the scene so it can push the real key away.")]
     public RealKeyRelocator relocator;
+    public ExitDoorRoom2   exitDoor;   // assign in Inspector — no FindObjectOfType needed
 
     void OnTriggerEnter(Collider other) {
         if (!other.CompareTag("Player")) return;
 
-        // Tell AI Director the player grabbed the dummy key
-        AIDirector.I?.Fire(TriggerKind.OnSectionEnter, "dummy", 2);
-        DecisionLogger.I?.Log("DummyKeyGrabbed", "2.x", "DummyKeyPickup",
-            "You found something... but is it the right one?",
-            "Player grabbed dummy key — real key relocated, Greedy+10 logged.");
+        DecisionLogger.I?.Log(
+            "DummyKeyGrabbed", "2.puzzle", "DummyKeyPickup",
+            "Wrong key. The correct key has moved. Check the spawn room.",
+            "Dummy key collected — real key relocated, hazards swapped.");
 
         relocator?.Relocate();
+        CorridorHazardSwapper.I?.SwapHazards();
+        exitDoor?.NotifyDummyKeyCollected();
         Destroy(gameObject);
     }
 }

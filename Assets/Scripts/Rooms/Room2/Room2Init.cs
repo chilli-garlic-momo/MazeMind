@@ -24,7 +24,9 @@ public class Room2Init : MonoBehaviour
             Debug.LogError("Room2Init: PlayerMetrics.I is null.");
             return;
         }
-
+        Debug.Log("[Room2Init] Room 2 started. DecisionLogger=" + DecisionLogger.I +
+          " AIDirector=" + AIDirector.I);
+          
         PlayerMetrics.I.ConfigureRoom(
             totalWalkableTiles,
             gemsAvailable);

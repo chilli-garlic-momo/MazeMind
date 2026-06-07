@@ -2,7 +2,7 @@ using UnityEngine;
 
 public class TriggerTest : MonoBehaviour
 {
-    private void OnTriggerEnter(Collider other)
+    /*private void OnTriggerEnter(Collider other)
     {
         Debug.Log("ENTERED: " + other.name);
     }
@@ -10,5 +10,5 @@ public class TriggerTest : MonoBehaviour
     private void OnTriggerStay(Collider other)
     {
         Debug.Log("STAYING: " + other.name);
-    }
+    }*/
 }
