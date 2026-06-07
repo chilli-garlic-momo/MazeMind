@@ -3,85 +3,76 @@ using UnityEngine;
 using MazeMind.Core;
 
 /// <summary>
-/// Section 1.2 — Valley jump with three gaps.
+/// Section 1.2 — Valley jump.
+/// v11 rework: the THIRD platform (PlatformC) is intentionally UNREACHABLE.
+/// When the player jumps from PlatformB toward PlatformC, the third platform
+/// slides away forever (SlideForever) so the player falls into the pit between
+/// B and C. The pit's fall-trigger fires the ForcedFallSequence which fades
+/// to black and respawns the player at Spawn_1_5.
 ///
-///  Gap 1 (A -> B):  honest, fixed width. PitDeathTrigger underneath kills on miss.
-///  Gap 2 (B -> C):  WIDENS visibly mid-jump. Single-jump fails; double-jump clears.
-///                   PitDeathTrigger underneath kills on miss.
-///  Gap 3 (C -> ?):  no opposite platform. Trigger volume in mid-air forces the
-///                   ForcedFallSequence (fade-to-black + scream + respawn at 1.5).
-///                   Do NOT put a PitDeathTrigger under Gap 3 — it would steal
-///                   the kill from the forced-fall sequence.
+/// Inspector wiring:
+///   platformC              -> Transform of the THIRD platform
+///   gap2DetectionZone      -> Box Collider (Is Trigger) above the gap BEFORE C
+///                             (the trigger the player crosses when jumping at C)
+///   gap3FallTrigger        -> Box Collider (Is Trigger) in the pit below that gap
+///   forcedFallSequence     -> ForcedFallSequence component with respawnAt_1_5 set
 /// </summary>
 public class Section12Director : MonoBehaviour {
 
     [Header("Platforms")]
     public Transform platformC;
-    [Tooltip("How far PlatformC slides on Z when Gap 2 widens. Pumped up so it's VISIBLY moving — was too subtle.")]
-    public Vector3   platformCWidenOffset = new Vector3(0, 0, 3.2f);
-    public float     widenDuration = 0.45f;
+    [Tooltip("How fast PlatformC retreats once player commits the jump. Bigger = obviously unreachable.")]
+    public float platformCRetreatSpeed = 12f;
 
-    [Header("Gap 2 detection")]
+    [Header("Gap-before-C detection (player jumps in)")]
     public Collider gap2DetectionZone;
 
-    [Header("Gap 3 forced fall")]
+    [Header("Pit fall trigger (under that gap) + sequence")]
     public Collider gap3FallTrigger;
     public ForcedFallSequence forcedFallSequence;
 
-    private Vector3 _platformCStart;
-    private bool _widened;
+    private bool _retreating;
     private bool _fallTriggered;
-
-    void Start() {
-        if (platformC != null) _platformCStart = platformC.localPosition;
-        if (AIDirector.I != null) {
-            float w = AIDirector.I.ComputeRoom12Gap2Widen();
-            // Clamp so the widen is always at least visible.
-            w = Mathf.Max(w, 0.75f);
-            platformCWidenOffset *= w;
-        }
-    }
 
     void OnEnable() {
         if (gap2DetectionZone != null) {
+            gap2DetectionZone.isTrigger = true;
             var relay = gap2DetectionZone.gameObject.GetComponent<_TriggerRelay>()
                        ?? gap2DetectionZone.gameObject.AddComponent<_TriggerRelay>();
-            relay.onPlayerEnter = OnPlayerEnteredGap2;
+            relay.onPlayerEnter = OnPlayerCommittedJumpAtC;
         }
         if (gap3FallTrigger != null) {
+            gap3FallTrigger.isTrigger = true;
             var relay = gap3FallTrigger.gameObject.GetComponent<_TriggerRelay>()
                        ?? gap3FallTrigger.gameObject.AddComponent<_TriggerRelay>();
-            relay.onPlayerEnter = OnPlayerHitGap3;
+            relay.onPlayerEnter = OnPlayerHitPit;
         }
     }
 
-    void OnPlayerEnteredGap2() {
-        if (_widened || platformC == null) return;
-        _widened = true;
-        StartCoroutine(WidenPlatform());
-        DecisionLogger.I?.Log("Room1Gap2", "1.2", "WidenGap",
-            "The floor moved.",
-            $"Gap 2 widened by {platformCWidenOffset.z:F2}m mid-jump.");
+    void OnPlayerCommittedJumpAtC() {
+        if (_retreating || platformC == null) return;
+        _retreating = true;
+        StartCoroutine(RetreatPlatformC());
+        DecisionLogger.I?.Log("Room1Gap3", "1.2", "PlatformRetreat",
+            "The far edge slipped away.",
+            "PlatformC sliding away forever; player will fall into 1.5.");
     }
 
-    IEnumerator WidenPlatform() {
-        Vector3 from = platformC.localPosition;
-        Vector3 to   = _platformCStart + platformCWidenOffset;
-        float t = 0f;
-        while (t < widenDuration) {
-            t += Time.deltaTime;
-            platformC.localPosition = Vector3.Lerp(from, to, t / widenDuration);
+    IEnumerator RetreatPlatformC() {
+        // Slide on local +Z (away from PlatformB). Continues until scene unloads
+        // or player respawns elsewhere via ForcedFallSequence.
+        while (platformC != null) {
+            platformC.position += new Vector3(0, 0, platformCRetreatSpeed * Time.deltaTime);
             yield return null;
         }
-        platformC.localPosition = to;
     }
 
-    void OnPlayerHitGap3() {
+    void OnPlayerHitPit() {
         if (_fallTriggered) return;
         _fallTriggered = true;
         DecisionLogger.I?.Log("Room1Gap3", "1.2", "ForcedFall",
             "...",
-            "Player fell into gap 3 (forced). Respawning into Section 1.5.");
+            "Player fell into the pit (forced). Respawning into Section 1.5.");
         if (forcedFallSequence != null) {
             forcedFallSequence.Play();
         } else {

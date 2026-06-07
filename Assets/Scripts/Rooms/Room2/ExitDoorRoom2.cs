@@ -1,4 +1,23 @@
-// File: ExitDoorRoom2.cs
+// File: ExitDoorRoom2.cs — v11
+// Key change: the door has a SOLID wall (solidBlocker) that physically stops
+// the player from walking through until the door actually opens. Without this,
+// the player would walk into the trigger, fail the open conditions (no key /
+// dacoit still blocking), and then *keep walking* through the door cube into
+// the empty space behind it — falling and getting killBelowY'd. v10 had no
+// physical barrier, only a trigger.
+//
+// Setup in Unity (Section_1_5 scene):
+//   1. Make the ExitDoor a small GameObject with this script.
+//   2. Add a Box Collider on it — Is Trigger = ON (proximity sensor).
+//   3. Add a CHILD GameObject called "DoorBlocker" with a Box Collider
+//      (Is Trigger = OFF) sized to fill the doorway opening. Drag that
+//      child's Collider/GameObject into the solidBlocker slot.
+//   4. (Optional) Add a child "SmallDoor" mesh and drag into smallDoor.
+//   5. nextSceneName = "Room2".
+//
+// While locked: blocker is enabled — player physically can't pass.
+// When TryOpen() succeeds: blocker disables, door swings, scene loads.
+
 using System.Collections;
 using UnityEngine;
 using MazeMind.Core;
@@ -8,33 +27,30 @@ public class ExitDoorRoom2 : MonoBehaviour
     public DacoitRoom2 dacoit;
     public string nextSceneName = "Room3";
 
-    [Header("Door swing — assign the SmallDoor child Transform if you have one")]
+    [Header("Solid blocker (v11) — REQUIRED. Stops player walking through locked door.")]
+    [Tooltip("A child GameObject with a non-trigger collider that fills the doorway.")]
+    public GameObject solidBlocker;
+
+    [Header("Door swing — assign the SmallDoor child Transform")]
     public Transform smallDoor;
     public float openAngle = 90f;
     public float openDuration = 0.5f;
 
     bool _opened;
     bool _hadDummyKey;
-
-    void Awake()
-    {
-        GameManager.EnsureExists();
-        if (dacoit == null)
-        {
-#pragma warning disable 0618
-            dacoit = FindObjectOfType<DacoitRoom2>();
-#pragma warning restore 0618
-        }
-    }
-
     public void NotifyDummyKeyCollected() => _hadDummyKey = true;
+
+    void Awake() {
+        // Always start locked: blocker on.
+        if (solidBlocker != null) solidBlocker.SetActive(true);
+        else Debug.LogWarning("[ExitDoorRoom2] solidBlocker not assigned — player will walk through the door if conditions fail.");
+    }
 
     public void TryOpen()
     {
         if (_opened) return;
 
-        var gm = GameManager.EnsureExists();
-        bool hasKey = gm.hasKey;
+        bool hasKey = GameManager.Instance != null && GameManager.Instance.hasKey;
         bool dacoitGone = dacoit == null || !dacoit.gameObject.activeSelf;
 
         if (!hasKey)
@@ -46,30 +62,35 @@ public class ExitDoorRoom2 : MonoBehaviour
                 ? "Player has dummy key, tried exit — redirected to spawn room."
                 : "Player has no key.";
             Log(msg, dev);
-            Debug.Log("[ExitDoorRoom2] Blocked: no key.");
             return;
         }
-
         if (!dacoitGone)
         {
-            int shortBy = dacoit != null ? Mathf.Max(0, dacoit.gemDemand - gm.gems) : 0;
-            Log($"You are {shortBy} short. The maze remembers.",
+            int demand = dacoit.gemDemand;
+            int have = GameManager.Instance != null ? GameManager.Instance.gems : 0;
+            Log($"You are {Mathf.Max(0, demand - have)} short. The maze remembers.",
                 "Player tried door — dacoit still blocking.");
-            Debug.Log("[ExitDoorRoom2] Blocked: dacoit has not accepted payment yet.");
             return;
         }
 
+        // PASSED — open the door for real.
         _opened = true;
-        AIDirector.I?.Fire(TriggerKind.OnSectionExit, "2.exit", 2);
+        if (solidBlocker != null) solidBlocker.SetActive(false);
 
-        DecisionLogger.I?.Log("RoomComplete", "2.exit", "RoomEnd",
+        AIDirector.I?.Fire(TriggerKind.OnSectionExit, "1.5", 1);
+        if (GameManager.Instance != null) {
+            GameManager.Instance.hasKey = false;
+            GameManager.Instance.ResetForNextRoom();
+        }
+
+        DecisionLogger.I?.Log("RoomComplete", "1.exit", "RoomEnd",
             "Profile updated. Adaptation complete. Preparing next room.",
-            $"Exit confirmed. Loading {nextSceneName}.");
+            $"Room 1 exit confirmed. Loading {nextSceneName}.");
 
-        gm.ResetForNextRoom();
-
-        if (smallDoor != null) StartCoroutine(SwingOpen());
-        else LoadNext();
+        if (smallDoor != null)
+            StartCoroutine(SwingOpen());
+        else
+            LoadNext();
     }
 
     IEnumerator SwingOpen()
@@ -88,19 +109,32 @@ public class ExitDoorRoom2 : MonoBehaviour
         LoadNext();
     }
 
-    void LoadNext()
-    {
-        if (string.IsNullOrEmpty(nextSceneName)) return;
+    void LoadNext() {
+        // Freeze the player so they don't wander off the floor during the transition.
+        var player = GameObject.FindWithTag("Player");
+        if (player != null) {
+            var cc = player.GetComponent<CharacterController>();
+            if (cc != null) cc.enabled = false;
+            var pc = player.GetComponent("PlayerController") as MonoBehaviour;
+            if (pc != null) pc.enabled = false;
+        }
 
         if (BetweenRoomManager.I != null) BetweenRoomManager.I.ShowScreen(nextSceneName);
         else UnityEngine.SceneManagement.SceneManager.LoadScene(nextSceneName);
     }
 
     void Log(string player, string dev) =>
-        DecisionLogger.I?.Log("ExitAttempt", "2.exit", "DoorBlocked", player, dev);
+        DecisionLogger.I?.Log("ExitAttempt", "1.exit", "DoorBlocked", player, dev);
 
     void OnTriggerEnter(Collider other)
     {
         if (other.CompareTag("Player")) TryOpen();
+    }
+
+    void OnTriggerStay(Collider other)
+    {
+        // Stay handles: player presses against locked door, then later collects
+        // the key / pays dacoit — next physics tick re-evaluates and opens.
+        if (!_opened && other.CompareTag("Player")) TryOpen();
     }
 }

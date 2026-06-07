@@ -4,26 +4,21 @@ using MazeMind.Core;
 
 /// <summary>
 /// Section 1.3 laser-maze floor.
-/// Supports MULTI-TILE entry and exit doorways (a whole row of tiles, not one).
-/// At Start() one entry tile + one exit tile are chosen at random from the lists,
-/// a safe path is generated entry -> key -> exit, and EVERY tile of both
-/// doorways (plus their immediate inward neighbors) is forced safe so the player
-/// can step in/out anywhere along the doorway.
+/// v11: exposes Regenerate() so Section13Director can shuffle the safe path
+/// every time the player re-enters 1.3 (after a death OR after being
+/// bounced back from 1.5 for missing the key).
 /// </summary>
 public class CheckboxFloorGenerator : MonoBehaviour
 {
     [Header("Grid dimensions")]
-    public int cols = 10;   // X axis
-    public int rows = 6;    // Z axis
+    public int cols = 10;
+    public int rows = 6;
 
     [Header("Entry / exit doorways (lists of tiles)")]
-    [Tooltip("All tiles that make up the ENTRY doorway. Every one is forced safe. Path starts at one of them.")]
     public List<Vector2Int> entryCoords = new() { new Vector2Int(0, 0) };
-    [Tooltip("All tiles that make up the EXIT doorway. Every one is forced safe. Path ends at one of them.")]
     public List<Vector2Int> exitCoords  = new() { new Vector2Int(9, 5) };
 
     [Header("Path generation")]
-    [Tooltip("Base path length as fraction of (cols+rows). 1.0 = straight, 2.0 = winding.")]
     public float basePathFactor = 1.2f;
 
     [Header("Key on path")]
@@ -44,10 +39,32 @@ public class CheckboxFloorGenerator : MonoBehaviour
     private HashSet<Vector2Int> _safeCoords = new();
     private List<Vector2Int> _orderedPath = new();
     private Vector2Int _keyCoord;
+    private GameObject _spawnedKey;
 
     void Start()
     {
         CollectTiles();
+        Regenerate();
+    }
+
+    /// <summary>
+    /// Public — clears existing key + bullet traps + materials, then
+    /// generates a fresh safe path & re-spawns the key.
+    /// Safe to call repeatedly (called by Section13Director on re-entry).
+    /// </summary>
+    public void Regenerate()
+    {
+        if (_tiles.Count == 0) CollectTiles();
+
+        // Wipe previous key (key may have been picked up already — handle null)
+        if (_spawnedKey != null) { Destroy(_spawnedKey); _spawnedKey = null; }
+
+        // Wipe previous bullet traps so traps don't pile up across regens
+        foreach (var t in _tiles) {
+            var bt = t.GetComponent<BulletTrap>();
+            if (bt != null) Destroy(bt);
+        }
+
         GenerateSafePath();
         ApplyTilesTagsAndScripts();
         SpawnKey();
@@ -77,7 +94,6 @@ public class CheckboxFloorGenerator : MonoBehaviour
 
     Vector2Int InwardNeighbor(Vector2Int c)
     {
-        // Move 1 step toward grid center so the tile adjacent to the doorway is also safe.
         int dx = 0, dz = 0;
         if (c.x == 0) dx = 1; else if (c.x == cols - 1) dx = -1;
         if (c.y == 0) dz = 1; else if (c.y == rows - 1) dz = -1;
@@ -90,7 +106,6 @@ public class CheckboxFloorGenerator : MonoBehaviour
         _safeCoords.Clear();
         _orderedPath.Clear();
 
-        // Sanitize lists
         if (entryCoords == null || entryCoords.Count == 0) entryCoords = new() { new Vector2Int(0, 0) };
         if (exitCoords  == null || exitCoords.Count  == 0) exitCoords  = new() { new Vector2Int(cols - 1, rows - 1) };
 
@@ -101,7 +116,6 @@ public class CheckboxFloorGenerator : MonoBehaviour
         int targetLength = Mathf.RoundToInt((cols + rows) * basePathFactor * trapDensity);
         targetLength = Mathf.Clamp(targetLength, cols + rows - 2, cols * rows / 2);
 
-        // Pick one entry + one exit tile at random from the doorway lists
         Vector2Int entry = ClampToGrid(entryCoords[Random.Range(0, entryCoords.Count)]);
         Vector2Int exit  = ClampToGrid(exitCoords [Random.Range(0, exitCoords.Count)]);
 
@@ -128,8 +142,6 @@ public class CheckboxFloorGenerator : MonoBehaviour
         for (int i = 1; i < leg2.Count; i++) _orderedPath.Add(leg2[i]);
         foreach (var p in _orderedPath) _safeCoords.Add(p);
 
-        // FORCE every doorway tile + its inward neighbor to be safe — so the
-        // player can enter/exit through any tile of the doorway row.
         foreach (var c in entryCoords) {
             var cc = ClampToGrid(c);
             _safeCoords.Add(cc);
@@ -231,12 +243,14 @@ public class CheckboxFloorGenerator : MonoBehaviour
 
     void SpawnKey()
     {
+        // If the player already picked up the key once, don't spawn again.
+        if (GameManager.Instance != null && GameManager.Instance.hasKey) return;
         if (keyPrefab == null) { Debug.LogWarning("[CheckboxFloor] keyPrefab not set."); return; }
         var keyTile = TileAt(_keyCoord);
         if (keyTile == null) { Debug.LogWarning($"[CheckboxFloor] no tile at {_keyCoord}"); return; }
         Vector3 pos = keyTile.transform.position + Vector3.up * keyHeightOffset;
         Transform parent = keyParent != null ? keyParent : transform.parent;
-        Instantiate(keyPrefab, pos, Quaternion.identity, parent);
+        _spawnedKey = Instantiate(keyPrefab, pos, Quaternion.identity, parent);
         Debug.Log($"[CheckboxFloor] key spawned at {_keyCoord} pos {pos}");
     }
 
