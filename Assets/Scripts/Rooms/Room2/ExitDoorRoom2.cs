@@ -1,102 +1,120 @@
-// File: ExitDoorRoom2.cs — v11
-// Key change: the door has a SOLID wall (solidBlocker) that physically stops
-// the player from walking through until the door actually opens. Without this,
-// the player would walk into the trigger, fail the open conditions (no key /
-// dacoit still blocking), and then *keep walking* through the door cube into
-// the empty space behind it — falling and getting killBelowY'd. v10 had no
-// physical barrier, only a trigger.
-//
-// Setup in Unity (Section_1_5 scene):
-//   1. Make the ExitDoor a small GameObject with this script.
-//   2. Add a Box Collider on it — Is Trigger = ON (proximity sensor).
-//   3. Add a CHILD GameObject called "DoorBlocker" with a Box Collider
-//      (Is Trigger = OFF) sized to fill the doorway opening. Drag that
-//      child's Collider/GameObject into the solidBlocker slot.
-//   4. (Optional) Add a child "SmallDoor" mesh and drag into smallDoor.
-//   5. nextSceneName = "Room2".
-//
-// While locked: blocker is enabled — player physically can't pass.
-// When TryOpen() succeeds: blocker disables, door swings, scene loads.
-
+// File: ExitDoorRoom2.cs — v12 (hardened: proximity + heavy logging + scene fallback)
+// Replace the entire file in Assets/Scripts/Rooms/Room2/ExitDoorRoom2.cs
 using System.Collections;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using MazeMind.Core;
 
 public class ExitDoorRoom2 : MonoBehaviour
 {
+    [Header("Refs")]
     public DacoitRoom2 dacoit;
-    public string nextSceneName = "Room3";
+    public string nextSceneName = "Room2";
 
-    [Header("Solid blocker (v11) — REQUIRED. Stops player walking through locked door.")]
-    [Tooltip("A child GameObject with a non-trigger collider that fills the doorway.")]
-    public GameObject solidBlocker;
-
-    [Header("Door swing — assign the SmallDoor child Transform")]
+    [Header("Door swing — assign the SmallDoor child Transform (optional)")]
     public Transform smallDoor;
     public float openAngle = 90f;
     public float openDuration = 0.5f;
 
+    [Header("Auto-open proximity (works even if no trigger collider is set up)")]
+    public float autoOpenRadius = 2.5f;
+    public LayerMask playerMask = ~0;   // default: everything; we still filter by tag
+
+    [Header("Debug")]
+    public bool verboseLogs = true;
+    public KeyCode forceOpenKey = KeyCode.F2; // press to force-open while testing
+
     bool _opened;
     bool _hadDummyKey;
+    float _nextProbeTime;
+
     public void NotifyDummyKeyCollected() => _hadDummyKey = true;
 
-    void Awake() {
-        // Always start locked: blocker on.
-        if (solidBlocker != null) solidBlocker.SetActive(true);
-        else Debug.LogWarning("[ExitDoorRoom2] solidBlocker not assigned — player will walk through the door if conditions fail.");
+    void Update()
+    {
+        if (_opened) return;
+
+        // Debug override — useful while wiring the scene
+        if (Input.GetKeyDown(forceOpenKey))
+        {
+            Debug.LogWarning("[ExitDoorRoom2] Force-open key pressed.");
+            ForceOpen();
+            return;
+        }
+
+        // Proximity probe (cheap, every 0.15s) — covers cases where the
+        // BoxCollider isn't a trigger or the Player tag isn't perfect.
+        if (Time.time < _nextProbeTime) return;
+        _nextProbeTime = Time.time + 0.15f;
+
+        Collider[] hits = Physics.OverlapSphere(transform.position, autoOpenRadius, playerMask, QueryTriggerInteraction.Collide);
+        for (int i = 0; i < hits.Length; i++)
+        {
+            if (hits[i].CompareTag("Player"))
+            {
+                if (verboseLogs) Debug.Log("[ExitDoorRoom2] Player in range — TryOpen()");
+                TryOpen();
+                return;
+            }
+        }
     }
 
     public void TryOpen()
     {
         if (_opened) return;
 
-        bool hasKey = GameManager.Instance != null && GameManager.Instance.hasKey;
-        bool dacoitGone = dacoit == null || !dacoit.gameObject.activeSelf;
+        GameManager.EnsureExists();
+        bool hasKey      = GameManager.Instance != null && GameManager.Instance.hasKey;
+        bool dacoitGone  = dacoit == null || !dacoit.gameObject.activeSelf;
+
+        if (verboseLogs)
+            Debug.Log($"[ExitDoorRoom2] TryOpen: hasKey={hasKey}, dacoitGone={dacoitGone}, " +
+                      $"dacoit={(dacoit==null?"null":dacoit.name)}, nextScene='{nextSceneName}'");
 
         if (!hasKey)
         {
             string msg = _hadDummyKey
                 ? "Wrong key. Return to the spawn room. The real key is waiting."
                 : "Something is missing.";
-            string dev = _hadDummyKey
-                ? "Player has dummy key, tried exit — redirected to spawn room."
-                : "Player has no key.";
-            Log(msg, dev);
+            Log(msg, _hadDummyKey ? "Dummy key only." : "No key.");
             return;
         }
         if (!dacoitGone)
         {
             int demand = dacoit.gemDemand;
-            int have = GameManager.Instance != null ? GameManager.Instance.gems : 0;
+            int have   = GameManager.Instance != null ? GameManager.Instance.gems : 0;
             Log($"You are {Mathf.Max(0, demand - have)} short. The maze remembers.",
-                "Player tried door — dacoit still blocking.");
+                "Dacoit still blocking.");
             return;
         }
 
-        // PASSED — open the door for real.
-        _opened = true;
-        if (solidBlocker != null) solidBlocker.SetActive(false);
+        OpenAndLoad();
+    }
 
-        AIDirector.I?.Fire(TriggerKind.OnSectionExit, "1.5", 1);
-        if (GameManager.Instance != null) {
-            GameManager.Instance.hasKey = false;
-            GameManager.Instance.ResetForNextRoom();
-        }
+    public void ForceOpen()
+    {
+        if (_opened) return;
+        OpenAndLoad();
+    }
+
+    void OpenAndLoad()
+    {
+        _opened = true;
+        AIDirector.I?.Fire(TriggerKind.OnSectionExit, "1.exit", 1);
+        if (GameManager.Instance != null) GameManager.Instance.hasKey = false;
 
         DecisionLogger.I?.Log("RoomComplete", "1.exit", "RoomEnd",
             "Profile updated. Adaptation complete. Preparing next room.",
-            $"Room 1 exit confirmed. Loading {nextSceneName}.");
+            "Room 1 exit confirmed.");
 
-        if (smallDoor != null)
-            StartCoroutine(SwingOpen());
-        else
-            LoadNext();
+        if (smallDoor != null) StartCoroutine(SwingOpen());
+        else LoadNext();
     }
 
     IEnumerator SwingOpen()
     {
         Quaternion from = smallDoor.localRotation;
-        Quaternion to = Quaternion.Euler(0f, openAngle, 0f);
+        Quaternion to   = from * Quaternion.Euler(0f, openAngle, 0f);
         float t = 0f;
         while (t < openDuration)
         {
@@ -109,32 +127,53 @@ public class ExitDoorRoom2 : MonoBehaviour
         LoadNext();
     }
 
-    void LoadNext() {
-        // Freeze the player so they don't wander off the floor during the transition.
-        var player = GameObject.FindWithTag("Player");
-        if (player != null) {
-            var cc = player.GetComponent<CharacterController>();
-            if (cc != null) cc.enabled = false;
-            var pc = player.GetComponent("PlayerController") as MonoBehaviour;
-            if (pc != null) pc.enabled = false;
+    void LoadNext()
+    {
+        if (GameManager.Instance != null) GameManager.Instance.ResetForNextRoom();
+
+        string scene = string.IsNullOrEmpty(nextSceneName) ? "Room2" : nextSceneName;
+
+        // Verify scene is in Build Settings (common setup bug)
+        if (!Application.CanStreamedLevelBeLoaded(scene))
+        {
+            Debug.LogError($"[ExitDoorRoom2] Scene '{scene}' is NOT in Build Settings. " +
+                           "Open File > Build Settings and add Assets/Scenes/" + scene + ".unity.");
+            // try common alternates
+            string[] alts = { "Room2", "Room_2", "Room 2", "Scenes/Room2" };
+            foreach (var a in alts)
+            {
+                if (Application.CanStreamedLevelBeLoaded(a))
+                {
+                    Debug.LogWarning($"[ExitDoorRoom2] Falling back to '{a}'.");
+                    scene = a; break;
+                }
+            }
         }
 
-        if (BetweenRoomManager.I != null) BetweenRoomManager.I.ShowScreen(nextSceneName);
-        else UnityEngine.SceneManagement.SceneManager.LoadScene(nextSceneName);
+        if (verboseLogs) Debug.Log($"[ExitDoorRoom2] Loading scene '{scene}'");
+
+        if (BetweenRoomManager.I != null) BetweenRoomManager.I.ShowScreen(scene);
+        else SceneManager.LoadScene(scene);
     }
 
-    void Log(string player, string dev) =>
+    void Log(string player, string dev)
+    {
+        if (verboseLogs) Debug.Log($"[ExitDoorRoom2] Blocked: {dev} | msg=\"{player}\"");
         DecisionLogger.I?.Log("ExitAttempt", "1.exit", "DoorBlocked", player, dev);
+    }
 
     void OnTriggerEnter(Collider other)
     {
-        if (other.CompareTag("Player")) TryOpen();
+        if (other.CompareTag("Player"))
+        {
+            if (verboseLogs) Debug.Log("[ExitDoorRoom2] OnTriggerEnter by Player");
+            TryOpen();
+        }
     }
 
-    void OnTriggerStay(Collider other)
+    void OnDrawGizmosSelected()
     {
-        // Stay handles: player presses against locked door, then later collects
-        // the key / pays dacoit — next physics tick re-evaluates and opens.
-        if (!_opened && other.CompareTag("Player")) TryOpen();
+        Gizmos.color = Color.cyan;
+        Gizmos.DrawWireSphere(transform.position, autoOpenRadius);
     }
 }
