@@ -3,10 +3,12 @@ using UnityEngine;
 using MazeMind.Core;
 
 /// <summary>
-/// Generates Section 1.3's laser-maze floor. Entry and exit are CONSTANT per scene
-/// (set in inspector). A single safe path runs entry -> key tile -> exit, so the
-/// player is forced through the key on the way out. Trap tiles get a BulletTrap.
-/// Key placement along the path is chosen by AIDirector.ComputeRoom13KeyPathFraction().
+/// Section 1.3 laser-maze floor.
+/// Supports MULTI-TILE entry and exit doorways (a whole row of tiles, not one).
+/// At Start() one entry tile + one exit tile are chosen at random from the lists,
+/// a safe path is generated entry -> key -> exit, and EVERY tile of both
+/// doorways (plus their immediate inward neighbors) is forced safe so the player
+/// can step in/out anywhere along the doorway.
 /// </summary>
 public class CheckboxFloorGenerator : MonoBehaviour
 {
@@ -14,12 +16,14 @@ public class CheckboxFloorGenerator : MonoBehaviour
     public int cols = 10;   // X axis
     public int rows = 6;    // Z axis
 
-    [Header("Fixed entry / exit (in grid coords)")]
-    public Vector2Int entryCoord = new Vector2Int(0, 0);
-    public Vector2Int exitCoord  = new Vector2Int(9, 5);
+    [Header("Entry / exit doorways (lists of tiles)")]
+    [Tooltip("All tiles that make up the ENTRY doorway. Every one is forced safe. Path starts at one of them.")]
+    public List<Vector2Int> entryCoords = new() { new Vector2Int(0, 0) };
+    [Tooltip("All tiles that make up the EXIT doorway. Every one is forced safe. Path ends at one of them.")]
+    public List<Vector2Int> exitCoords  = new() { new Vector2Int(9, 5) };
 
     [Header("Path generation")]
-    [Tooltip("Base path length as fraction of (cols+rows). 1.0 = straight, 2.0 = very winding.")]
+    [Tooltip("Base path length as fraction of (cols+rows). 1.0 = straight, 2.0 = winding.")]
     public float basePathFactor = 1.2f;
 
     [Header("Key on path")]
@@ -71,10 +75,24 @@ public class CheckboxFloorGenerator : MonoBehaviour
         return null;
     }
 
+    Vector2Int InwardNeighbor(Vector2Int c)
+    {
+        // Move 1 step toward grid center so the tile adjacent to the doorway is also safe.
+        int dx = 0, dz = 0;
+        if (c.x == 0) dx = 1; else if (c.x == cols - 1) dx = -1;
+        if (c.y == 0) dz = 1; else if (c.y == rows - 1) dz = -1;
+        if (dx == 0 && dz == 0) return c;
+        return new Vector2Int(c.x + dx, c.y + dz);
+    }
+
     void GenerateSafePath()
     {
         _safeCoords.Clear();
         _orderedPath.Clear();
+
+        // Sanitize lists
+        if (entryCoords == null || entryCoords.Count == 0) entryCoords = new() { new Vector2Int(0, 0) };
+        if (exitCoords  == null || exitCoords.Count  == 0) exitCoords  = new() { new Vector2Int(cols - 1, rows - 1) };
 
         float trapDensity = 1.0f;
         if (AIDirector.I != null && AIDirector.I.state != null)
@@ -83,41 +101,48 @@ public class CheckboxFloorGenerator : MonoBehaviour
         int targetLength = Mathf.RoundToInt((cols + rows) * basePathFactor * trapDensity);
         targetLength = Mathf.Clamp(targetLength, cols + rows - 2, cols * rows / 2);
 
-        Vector2Int entry = ClampToGrid(entryCoord);
-        Vector2Int exit  = ClampToGrid(exitCoord);
+        // Pick one entry + one exit tile at random from the doorway lists
+        Vector2Int entry = ClampToGrid(entryCoords[Random.Range(0, entryCoords.Count)]);
+        Vector2Int exit  = ClampToGrid(exitCoords [Random.Range(0, exitCoords.Count)]);
 
-        // Pick key fraction from AIDirector
         float keyFrac = (AIDirector.I != null)
             ? AIDirector.I.ComputeRoom13KeyPathFraction()
             : 0.55f;
 
-        // Pick an intermediate key target somewhere between entry and exit.
-        // Linear interpolation across grid, then snap.
         Vector2 kf = Vector2.Lerp(entry, exit, keyFrac);
-        // Nudge slightly off the straight line so the path bends through it
         kf += new Vector2(Random.Range(-1.5f, 1.5f), Random.Range(-1.5f, 1.5f));
         _keyCoord = ClampToGrid(new Vector2Int(Mathf.RoundToInt(kf.x), Mathf.RoundToInt(kf.y)));
         if (_keyCoord == entry || _keyCoord == exit)
             _keyCoord = ClampToGrid(new Vector2Int(_keyCoord.x + 1, _keyCoord.y + 1));
 
-        // Two-leg walk: entry -> key, then key -> exit (force player through key).
         int leg1Target = Mathf.Max(2, Mathf.RoundToInt(targetLength * keyFrac));
         int leg2Target = Mathf.Max(2, targetLength - leg1Target);
 
         var visited = new HashSet<Vector2Int>();
         var leg1 = RandomWalkPath(entry, _keyCoord, leg1Target, visited);
-        // Don't reuse the key tile as "already visited" for leg 2 except as start.
         var visited2 = new HashSet<Vector2Int>(leg1);
         visited2.Remove(_keyCoord);
         var leg2 = RandomWalkPath(_keyCoord, exit, leg2Target, visited2);
 
-        // Stitch
         _orderedPath.AddRange(leg1);
         for (int i = 1; i < leg2.Count; i++) _orderedPath.Add(leg2[i]);
         foreach (var p in _orderedPath) _safeCoords.Add(p);
 
+        // FORCE every doorway tile + its inward neighbor to be safe — so the
+        // player can enter/exit through any tile of the doorway row.
+        foreach (var c in entryCoords) {
+            var cc = ClampToGrid(c);
+            _safeCoords.Add(cc);
+            _safeCoords.Add(ClampToGrid(InwardNeighbor(cc)));
+        }
+        foreach (var c in exitCoords) {
+            var cc = ClampToGrid(c);
+            _safeCoords.Add(cc);
+            _safeCoords.Add(ClampToGrid(InwardNeighbor(cc)));
+        }
+
         Debug.Log($"[CheckboxFloor] Path generated. Length={_orderedPath.Count}, trapDensity={trapDensity:F2}, " +
-                  $"entry={entry}, key={_keyCoord} (frac={keyFrac:F2}), exit={exit}");
+                  $"entry={entry} (of {entryCoords.Count}), key={_keyCoord} (frac={keyFrac:F2}), exit={exit} (of {exitCoords.Count})");
     }
 
     Vector2Int ClampToGrid(Vector2Int c) =>
@@ -134,47 +159,30 @@ public class CheckboxFloorGenerator : MonoBehaviour
         {
             var options = new List<Vector2Int>();
             Vector2Int[] dirs = { new(0, 1), new(0, -1), new(1, 0), new(-1, 0) };
-
-            foreach (var d in dirs)
-            {
+            foreach (var d in dirs) {
                 var next = current + d;
                 if (next.x < 0 || next.x >= cols || next.y < 0 || next.y >= rows) continue;
                 if (visited.Contains(next)) continue;
                 options.Add(next);
             }
-
             if (options.Count == 0) break;
 
             Vector2Int chosen;
-            if (path.Count >= targetLen)
-            {
+            if (path.Count >= targetLen) {
                 chosen = options[0];
                 int bestDist = ManhDist(chosen, end);
-                foreach (var o in options) {
-                    int d = ManhDist(o, end);
-                    if (d < bestDist) { bestDist = d; chosen = o; }
-                }
-            }
-            else
-            {
-                if (Random.value < 0.4f)
-                {
+                foreach (var o in options) { int d = ManhDist(o, end); if (d < bestDist) { bestDist = d; chosen = o; } }
+            } else {
+                if (Random.value < 0.4f) {
                     chosen = options[0];
                     int bestDist = ManhDist(chosen, end);
-                    foreach (var o in options) {
-                        int d = ManhDist(o, end);
-                        if (d < bestDist) { bestDist = d; chosen = o; }
-                    }
-                }
-                else chosen = options[Random.Range(0, options.Count)];
+                    foreach (var o in options) { int d = ManhDist(o, end); if (d < bestDist) { bestDist = d; chosen = o; } }
+                } else chosen = options[Random.Range(0, options.Count)];
             }
 
-            path.Add(chosen);
-            visited.Add(chosen);
-            current = chosen;
+            path.Add(chosen); visited.Add(chosen); current = chosen;
         }
 
-        // Force-connect to end if walk didn't reach
         while (current.x != end.x) {
             current.x += (end.x > current.x) ? 1 : -1;
             if (!visited.Contains(current)) { path.Add(current); visited.Add(current); }
@@ -183,30 +191,23 @@ public class CheckboxFloorGenerator : MonoBehaviour
             current.y += (end.y > current.y) ? 1 : -1;
             if (!visited.Contains(current)) { path.Add(current); visited.Add(current); }
         }
-
         return path;
     }
 
-    int ManhDist(Vector2Int a, Vector2Int b) =>
-        Mathf.Abs(a.x - b.x) + Mathf.Abs(a.y - b.y);
+    int ManhDist(Vector2Int a, Vector2Int b) => Mathf.Abs(a.x - b.x) + Mathf.Abs(a.y - b.y);
 
     void ApplyTilesTagsAndScripts()
     {
-        foreach (var tile in _tiles)
-        {
+        foreach (var tile in _tiles) {
             var coord = TileCoord(tile);
             bool isSafe = _safeCoords.Contains(coord);
 
-            if (isSafe)
-            {
+            if (isSafe) {
                 tile.tag = "SafeTile";
                 var bt = tile.GetComponent<BulletTrap>();
                 if (bt != null) Destroy(bt);
-
-                // Safe tile colliders must stay solid so the player can stand.
                 var safeCol = tile.GetComponent<Collider>();
                 if (safeCol != null) safeCol.isTrigger = false;
-
                 if (safeTileMat != null) {
                     var mr = tile.GetComponent<MeshRenderer>();
                     if (mr != null) mr.material = safeTileMat;
@@ -215,14 +216,11 @@ public class CheckboxFloorGenerator : MonoBehaviour
                     var mr = tile.GetComponent<MeshRenderer>();
                     if (mr != null) mr.material = debugSafeMat;
                 }
-            }
-            else
-            {
+            } else {
                 tile.tag = "TrapTile";
                 var col = tile.GetComponent<Collider>();
                 if (col != null) col.isTrigger = true;
-                if (tile.GetComponent<BulletTrap>() == null)
-                    tile.AddComponent<BulletTrap>();
+                if (tile.GetComponent<BulletTrap>() == null) tile.AddComponent<BulletTrap>();
                 if (trapTileMat != null) {
                     var mr = tile.GetComponent<MeshRenderer>();
                     if (mr != null) mr.material = trapTileMat;
@@ -233,19 +231,13 @@ public class CheckboxFloorGenerator : MonoBehaviour
 
     void SpawnKey()
     {
-        if (keyPrefab == null) {
-            Debug.LogWarning("[CheckboxFloor] keyPrefab not set — skipping key spawn.");
-            return;
-        }
+        if (keyPrefab == null) { Debug.LogWarning("[CheckboxFloor] keyPrefab not set."); return; }
         var keyTile = TileAt(_keyCoord);
-        if (keyTile == null) {
-            Debug.LogWarning($"[CheckboxFloor] no tile at key coord {_keyCoord}");
-            return;
-        }
+        if (keyTile == null) { Debug.LogWarning($"[CheckboxFloor] no tile at {_keyCoord}"); return; }
         Vector3 pos = keyTile.transform.position + Vector3.up * keyHeightOffset;
         Transform parent = keyParent != null ? keyParent : transform.parent;
         Instantiate(keyPrefab, pos, Quaternion.identity, parent);
-        Debug.Log($"[CheckboxFloor] key spawned at coord {_keyCoord} pos {pos}");
+        Debug.Log($"[CheckboxFloor] key spawned at {_keyCoord} pos {pos}");
     }
 
     void OnDrawGizmosSelected()

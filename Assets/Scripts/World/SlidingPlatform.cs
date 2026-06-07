@@ -6,43 +6,31 @@ public class SlidingPlatform : MonoBehaviour
 {
     [Header("Slide behavior")]
     [Tooltip("How far the platform slides backward (Z direction) during the jump.")]
-    public float slideDistance = 1.5f;
+    public float slideDistance = 4.5f;  // bumped — was too subtle in playtest
 
     [Tooltip("How fast the platform slides. Higher = harder to reach.")]
-    public float slideSpeed = 3f;
+    public float slideSpeed = 6f;
 
     [Tooltip("If true, this is the unjumpable Gap C. Slides infinitely, no return.")]
     public bool isForcedFall = false;
 
+    [Tooltip("How fast the forced-fall platform retreats. Higher = more obviously unreachable.")]
+    public float forcedFallSpeed = 14f;
+
     [Header("Trigger zone (when player jumps off this near platform, slide begins)")]
-    public Transform nearPlatform;  // drag the platform the player jumps FROM
-    public Collider jumpDetectionZone;  // a trigger volume on the near platform's edge
+    public Transform nearPlatform;
+    public Collider jumpDetectionZone;
 
     [Header("Reset behavior")]
-    public float resetDelay = 2f;  // seconds after player lands or dies before platform returns
+    public float resetDelay = 2f;
 
     [Header("AI Director modulation")]
-    [Tooltip("If true, reads AdaptationState to modify slide intensity.")]
     public bool aiModulated = true;
 
     private Vector3 _originalPos;
     private bool _hasTriggered = false;
 
-    void Start()
-    {
-        _originalPos = transform.position;
-
-        if (jumpDetectionZone == null)
-        {
-            Debug.LogWarning($"{name}: jumpDetectionZone not assigned!");
-        }
-    }
-
-    void OnTriggerEnter(Collider other)
-    {
-        // This OnTriggerEnter fires from jumpDetectionZone (if we set this script on the zone)
-        // But we'll use a helper script instead for cleaner separation
-    }
+    void Start() { _originalPos = transform.position; }
 
     public void OnPlayerJumped()
     {
@@ -53,49 +41,30 @@ public class SlidingPlatform : MonoBehaviour
         float finalSlideSpeed = ComputeSlideSpeed();
 
         if (isForcedFall)
-        {
-            // Gap C — slide away forever, way too fast
-            StartCoroutine(SlideForever(finalSlideSpeed));
-        }
+            StartCoroutine(SlideForever(forcedFallSpeed));
         else
-        {
-            // Gap B — slide a finite distance
             StartCoroutine(SlideAndHold(finalSlideDistance, finalSlideSpeed));
-        }
     }
 
     float ComputeSlideDistance()
     {
         if (!aiModulated || AIDirector.I == null) return slideDistance;
-
         var tags = AIDirector.I.state.activeTags;
         float multiplier = 1.0f;
-
-        if (tags.Contains("Reckless") || tags.Contains("Speedrunner"))
-            multiplier = 1.4f;
-        else if (tags.Contains("Paranoid"))
-            multiplier = 0.6f;
-
+        if (tags.Contains("Reckless") || tags.Contains("Speedrunner")) multiplier = 1.4f;
+        else if (tags.Contains("Paranoid")) multiplier = 0.7f;
         if (PlayerMetrics.I != null && PlayerMetrics.I.deathsInSection.TryGetValue("1.2", out int deaths))
-        {
-            multiplier *= Mathf.Max(0.4f, 1f - (deaths * 0.2f));
-        }
-
+            multiplier *= Mathf.Max(0.5f, 1f - (deaths * 0.15f));
         return slideDistance * multiplier;
     }
 
     float ComputeSlideSpeed()
     {
         if (!aiModulated || AIDirector.I == null) return slideSpeed;
-
         var tags = AIDirector.I.state.activeTags;
         float multiplier = 1.0f;
-
-        if (tags.Contains("Reckless") || tags.Contains("Speedrunner"))
-            multiplier = 1.3f;
-        else if (tags.Contains("Paranoid"))
-            multiplier = 0.7f;
-
+        if (tags.Contains("Reckless") || tags.Contains("Speedrunner")) multiplier = 1.3f;
+        else if (tags.Contains("Paranoid")) multiplier = 0.8f;
         return slideSpeed * multiplier;
     }
 
@@ -105,7 +74,7 @@ public class SlidingPlatform : MonoBehaviour
         Vector3 targetPos = startPos + new Vector3(0, 0, distance);
 
         float elapsed = 0f;
-        float duration = distance / speed;
+        float duration = Mathf.Max(0.05f, distance / speed);
 
         while (elapsed < duration)
         {

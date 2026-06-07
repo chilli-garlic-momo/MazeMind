@@ -13,14 +13,25 @@ public class PlayerHealth : MonoBehaviour {
     public Transform fallbackSpawn;
     public string fallbackSectionId = "1.1";
 
+    [Header("Safety net")]
+    [Tooltip("If the player ever falls below this Y, kill them. Catches missed PitDeathTrigger setups.")]
+    public float killBelowY = -15f;
+
     [System.Serializable] public class HealthEvent : UnityEvent<int,int> {}
-    public HealthEvent OnHealthChanged;   // (current, max) — wire HUD slider here
+    public HealthEvent OnHealthChanged;
 
     Vector3 _checkpointPos;
     string  _currentSectionId = "1.1";
     bool    _invuln;
+    bool    _respawning;
     CharacterController _cc;
-    MonoBehaviour _controller; // PlayerController, disabled briefly on death
+    MonoBehaviour _controller;
+
+    /// <summary>
+    /// True if the player should not take damage right now (post-respawn window,
+    /// currently dying, or already at 0 hp).
+    /// </summary>
+    public bool IsInvuln => _invuln || _respawning || currentHealth <= 0;
 
     void Awake() {
         currentHealth = maxHealth;
@@ -30,13 +41,19 @@ public class PlayerHealth : MonoBehaviour {
         else _checkpointPos = transform.position;
     }
 
+    void Update() {
+        if (!_respawning && transform.position.y < killBelowY) {
+            Kill(_currentSectionId);
+        }
+    }
+
     public void RegisterCheckpoint(Vector3 pos, string sectionId) {
         _checkpointPos = pos;
         _currentSectionId = sectionId;
     }
 
     public void Damage(int amount) {
-        if (_invuln || amount <= 0) return;
+        if (IsInvuln || amount <= 0) return;
         currentHealth = Mathf.Max(0, currentHealth - amount);
         PlayerMetrics.I?.OnDamage(amount);
         OnHealthChanged?.Invoke(currentHealth, maxHealth);
@@ -48,14 +65,17 @@ public class PlayerHealth : MonoBehaviour {
         OnHealthChanged?.Invoke(currentHealth, maxHealth);
     }
 
-    // Used by BulletTrap — instant death, tag the section that killed you.
+    /// <summary>Instant death from a trap. Deduped against active respawn / invuln.</summary>
     public void Kill(string sectionId) {
+        if (IsInvuln) return;
         currentHealth = 0;
         OnHealthChanged?.Invoke(0, maxHealth);
         Die(sectionId);
     }
 
     void Die(string sectionId) {
+        if (_respawning) return;
+        _respawning = true;
         PlayerMetrics.I?.OnDeath(sectionId);
         AIDirector.I?.Fire(TriggerKind.OnSectionDeath, sectionId, 1);
         DecisionLogger.I?.Log("OnSectionDeath", sectionId, "PlayerDeath", "", $"Death at {sectionId}");
@@ -72,9 +92,12 @@ public class PlayerHealth : MonoBehaviour {
 
         currentHealth = maxHealth;
         OnHealthChanged?.Invoke(currentHealth, maxHealth);
+
+        // Re-enable controller, then run an invuln window BEFORE clearing _respawning.
         _invuln = true;
         if (_controller != null) _controller.enabled = true;
         yield return new WaitForSeconds(invulnSecondsAfterRespawn);
         _invuln = false;
+        _respawning = false;
     }
 }
