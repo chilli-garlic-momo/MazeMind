@@ -11,3 +11,4 @@ public static class PlayFromBoot
             AssetDatabase.LoadAssetAtPath<SceneAsset>("Assets/Scenes/Boot.unity");
     }
 }
+#endif

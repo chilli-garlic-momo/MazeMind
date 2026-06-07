@@ -26,9 +26,7 @@ public class SlidingPlatform : MonoBehaviour
     public bool aiModulated = true;
 
     private Vector3 _originalPos;
-    private bool _isSliding = false;
     private bool _hasTriggered = false;
-    private int _deathCountInSection = 0;
 
     void Start()
     {
@@ -73,14 +71,11 @@ public class SlidingPlatform : MonoBehaviour
         var tags = AIDirector.I.state.activeTags;
         float multiplier = 1.0f;
 
-        // Reckless/Speedrunner = aggressive slide
         if (tags.Contains("Reckless") || tags.Contains("Speedrunner"))
             multiplier = 1.4f;
-        // Paranoid/Cautious = gentler slide
         else if (tags.Contains("Paranoid"))
             multiplier = 0.6f;
 
-        // Each death in section 1.2 reduces slide by 20% (mercy)
         if (PlayerMetrics.I != null && PlayerMetrics.I.deathsInSection.TryGetValue("1.2", out int deaths))
         {
             multiplier *= Mathf.Max(0.4f, 1f - (deaths * 0.2f));
@@ -120,14 +115,12 @@ public class SlidingPlatform : MonoBehaviour
         }
         transform.position = targetPos;
 
-        // Hold position until player lands or dies
         yield return new WaitForSeconds(resetDelay);
         ResetPlatform();
     }
 
     IEnumerator SlideForever(float speed)
     {
-        // Gap C — slide away at high speed, never reset until player teleports
         while (true)
         {
             transform.position += new Vector3(0, 0, speed * Time.deltaTime);
@@ -140,6 +133,5 @@ public class SlidingPlatform : MonoBehaviour
         StopAllCoroutines();
         transform.position = _originalPos;
         _hasTriggered = false;
-        _isSliding = false;
     }
 }
