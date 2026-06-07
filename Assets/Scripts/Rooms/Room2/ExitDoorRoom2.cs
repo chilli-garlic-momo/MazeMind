@@ -72,7 +72,10 @@ public class ExitDoorRoom2 : MonoBehaviour
         LoadNext();
     }
 
-    void LoadNext() => BetweenRoomManager.I?.ShowScreen(nextSceneName);
+    void LoadNext() {
+    if (BetweenRoomManager.I != null) BetweenRoomManager.I.ShowScreen(nextSceneName);
+    else UnityEngine.SceneManagement.SceneManager.LoadScene(nextSceneName);
+}
 
     void Log(string player, string dev) =>
         DecisionLogger.I?.Log("ExitAttempt", "2.exit", "DoorBlocked", player, dev);
