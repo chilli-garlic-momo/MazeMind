@@ -431,6 +431,8 @@ A complete demonstration should show:
 **Expected demo duration:** approximately 3–5 minutes. See `DEMO_SCRIPT.md`
 for a 90-second highlight reel.
 
+**Demo video & build:** https://drive.google.com/drive/folders/1jdt8sj4QWSmbRBFtELKcw8AbV3CMxioh?usp=drive_link
+
 ---
 
 ## Project Structure
@@ -489,8 +491,9 @@ is a deterministic rule engine, by design, for explainability.
 ---
 
 ## Credits
-- **Team:** chilli-garlic-momo & codenamed22
+- **Team:** chilli-garlic-momo, codenamed22 & abeecodes
 - **Engine:** Unity 6 (6000.x), URP
 - **Built for:** the *AI in Games* track.
+- **Demo Video / Build Drive:** https://drive.google.com/drive/folders/1jdt8sj4QWSmbRBFtELKcw8AbV3CMxioh?usp=drive_link
 
 *MazeMind — Hackathon Submission · AI in Games Track*
