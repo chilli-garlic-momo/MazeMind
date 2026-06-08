@@ -40,9 +40,19 @@ public class CheckboxFloorGenerator : MonoBehaviour
     private List<Vector2Int> _orderedPath = new();
     private Vector2Int _keyCoord;
     private GameObject _spawnedKey;
+    private bool _skipGeneration;
+    private CheckboxFloorGenerator _nestedGenerator;
 
     void Start()
     {
+        _nestedGenerator = FindNestedFloorGenerator();
+        if (_nestedGenerator != null)
+        {
+            _skipGeneration = true;
+            Debug.LogWarning($"[CheckboxFloor] Skipping wrapper generator on {name}; using nested CheckBoxFloor generator instead.");
+            return;
+        }
+
         CollectTiles();
         Regenerate();
     }
@@ -54,7 +64,13 @@ public class CheckboxFloorGenerator : MonoBehaviour
     /// </summary>
     public void Regenerate()
     {
+        if (_skipGeneration)
+        {
+            if (_nestedGenerator != null) _nestedGenerator.Regenerate();
+            return;
+        }
         if (_tiles.Count == 0) CollectTiles();
+        if (_tiles.Count == 0) { Debug.LogWarning($"[CheckboxFloor] No grid tiles found under {name}."); return; }
 
         // Wipe previous key (key may have been picked up already — handle null)
         if (_spawnedKey != null) { Destroy(_spawnedKey); _spawnedKey = null; }
@@ -74,7 +90,19 @@ public class CheckboxFloorGenerator : MonoBehaviour
     {
         _tiles.Clear();
         foreach (Transform child in transform)
-            _tiles.Add(child.gameObject);
+            if (IsGridTile(child.gameObject)) _tiles.Add(child.gameObject);
+    }
+
+    CheckboxFloorGenerator FindNestedFloorGenerator()
+    {
+        foreach (var gen in GetComponentsInChildren<CheckboxFloorGenerator>(true))
+            if (gen != this) return gen;
+        return null;
+    }
+
+    bool IsGridTile(GameObject tile)
+    {
+        return tile.GetComponent<Collider>() != null && tile.name.StartsWith("Tile_");
     }
 
     Vector2Int TileCoord(GameObject tile)
@@ -249,8 +277,13 @@ public class CheckboxFloorGenerator : MonoBehaviour
         var keyTile = TileAt(_keyCoord);
         if (keyTile == null) { Debug.LogWarning($"[CheckboxFloor] no tile at {_keyCoord}"); return; }
         Vector3 pos = keyTile.transform.position + Vector3.up * keyHeightOffset;
-        Transform parent = keyParent != null ? keyParent : transform.parent;
+        Transform parent = keyParent != null ? keyParent : transform;
         _spawnedKey = Instantiate(keyPrefab, pos, Quaternion.identity, parent);
+        foreach (var pickup in _spawnedKey.GetComponentsInChildren<KeyPickup>(true))
+        {
+            pickup.destroyTargetOverride = _spawnedKey.transform;
+            pickup.destroyRoot = false;
+        }
         Debug.Log($"[CheckboxFloor] key spawned at {_keyCoord} pos {pos}");
     }
 
