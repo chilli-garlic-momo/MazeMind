@@ -20,6 +20,8 @@ public class DacoitRoom2 : MonoBehaviour
     bool _paid;
     bool _respawningNoKey;
 
+    public bool IsCleared => _paid || !gameObject.activeSelf;
+
     void Awake()
     {
         GameManager.EnsureExists();
@@ -48,20 +50,30 @@ public class DacoitRoom2 : MonoBehaviour
     {
         if (_paid || _respawningNoKey || !other.CompareTag("Player")) return;
 
+        TryResolveForPlayer(other.gameObject, "DacoitTrigger");
+    }
+
+    public bool TryResolveForPlayer(GameObject player, string source = "DacoitResolve")
+    {
+        if (_paid || !gameObject.activeSelf) return true;
+        if (_respawningNoKey) return false;
+
         var gm = GameManager.EnsureExists();
 
-        if (!gm.hasKey)
+        bool hasKey = gm.hasKey;
+        int have = gm.gems;
+
+        if (!hasKey)
         {
             _respawningNoKey = true;
             SetDemandLabel("Go find the key first.");
             DecisionLogger.I?.Log("DacoitNoKey", "1.5", "DacoitBlocked",
                 "Go find the key first.",
-                "Player reached dacoit without the key. Respawning at Room 1 start.");
-            StartCoroutine(RespawnToStart(other.gameObject));
-            return;
+                $"Player reached dacoit without the key via {source}. Respawning at Room 1 start.");
+            if (player != null) StartCoroutine(RespawnToStart(player));
+            return false;
         }
 
-        int have = gm.gems;
         int shortBy = Mathf.Max(0, gemDemand - have);
 
         if (have >= gemDemand)
@@ -73,37 +85,56 @@ public class DacoitRoom2 : MonoBehaviour
                 "Smart. You listened.",
                 $"Player paid {gemDemand} gems. Remaining: {gm.gems}");
             gameObject.SetActive(false);
+            return true;
         }
         else
         {
+            _respawningNoKey = true;
             SetDemandLabel($"Not enough.\nYou are {shortBy} short.");
             DecisionLogger.I?.Log("DacoitBlocked", "1.5", "DacoitDenied",
-                $"You are {shortBy} short. The maze remembers.",
-                $"Player has {have}, needs {gemDemand}. Blocked.");
+                $"You are {shortBy} short. The maze sends you back.",
+                $"Player has key but only {have}/{gemDemand} gems via {source}. Respawning at Room 1 start.");
+            if (player != null) StartCoroutine(RespawnToStart(player));
+            return false;
         }
     }
 
     System.Collections.IEnumerator RespawnToStart(GameObject player)
     {
-        yield return new WaitForSeconds(respawnDelay);
+        // Freeze + protect the player IMMEDIATELY so they can't walk off the
+        // ledge next to the dacoit (or get killed by a nearby PitDeathTrigger)
+        // during the respawnDelay wait. Previously the player kept moving
+        // forward during the 1.5s wait, fell into the pit beside the dacoit,
+        // and got pit-killed back to the wrong checkpoint — making 1.5
+        // unbeatable without the key.
+        var hp = player.GetComponent<PlayerHealth>();
+        var cc = player.GetComponent<CharacterController>();
+        var controller = player.GetComponent("PlayerController") as MonoBehaviour;
+
+        if (hp != null) hp.SetInvulnerable(true);
+        if (controller != null) controller.enabled = false;
+        if (cc != null) cc.enabled = false;
 
         AutoFindRespawnTargetIfNeeded(player);
 
-        var hp = player.GetComponent<PlayerHealth>();
-        var cc = player.GetComponent<CharacterController>();
-
+        // Snap to respawn target right away so the player visually stays put
+        // (or fades to start) instead of physically falling into the pit.
         if (respawnIfNoKey != null)
         {
-            if (hp != null) hp.RegisterCheckpoint(respawnIfNoKey.position, respawnSectionId);
-            if (cc != null) cc.enabled = false;
             player.transform.position = respawnIfNoKey.position;
             player.transform.rotation = respawnIfNoKey.rotation;
-            if (cc != null) cc.enabled = true;
+            if (hp != null) hp.RegisterCheckpoint(respawnIfNoKey.position, respawnSectionId);
         }
         else
         {
             Debug.LogWarning("[DacoitRoom2] No respawn target found. Create Spawn_1_1 or assign respawnIfNoKey.");
         }
+
+        yield return new WaitForSeconds(respawnDelay);
+
+        if (cc != null) cc.enabled = true;
+        if (controller != null) controller.enabled = true;
+        if (hp != null) hp.SetInvulnerable(false);
 
         _respawningNoKey = false;
         RefreshLabel();

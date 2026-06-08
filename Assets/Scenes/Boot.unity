@@ -925,7 +925,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f0d9a1a397a9bf644aa413c6f5bed6d7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BootInit
-  firstRoom: Room1
+  firstRoom: MainMenu
 --- !u!4 &758984007
 Transform:
   m_ObjectHideFlags: 0

@@ -35,17 +35,69 @@ public class CheckboxFloorGenerator : MonoBehaviour
     public Color debugSafeColor = Color.green;
     public Material debugSafeMat;
 
+    [Header("Section start checkpoint")]
+    [Tooltip("Where the player respawns after dying on a trap tile. If empty, the first entryCoords tile is used.")]
+    public Transform sectionStartPoint;
+    [Tooltip("Section ID used when registering the checkpoint (must match BulletTrap.sectionId).")]
+    public string sectionId = "1.3";
+
     private List<GameObject> _tiles = new();
     private HashSet<Vector2Int> _safeCoords = new();
     private List<Vector2Int> _orderedPath = new();
     private Vector2Int _keyCoord;
     private GameObject _spawnedKey;
+    private bool _skipGeneration;
+    private CheckboxFloorGenerator _nestedGenerator;
+    private Vector3 _autoStartPos;
+    private bool _autoStartPosValid;
 
     void Start()
     {
+        _nestedGenerator = FindNestedFloorGenerator();
+        if (_nestedGenerator != null)
+        {
+            _skipGeneration = true;
+            Debug.LogWarning($"[CheckboxFloor] Skipping wrapper generator on {name}; using nested CheckBoxFloor generator instead.");
+            return;
+        }
+
         CollectTiles();
         Regenerate();
+        EnsureCheckpointTrigger();
     }
+
+    void EnsureCheckpointTrigger()
+    {
+        // Compute fallback start position from first entry tile if no explicit point assigned.
+        if (sectionStartPoint == null && entryCoords != null && entryCoords.Count > 0)
+        {
+            var t = TileAt(ClampToGrid(entryCoords[0]));
+            if (t != null)
+            {
+                _autoStartPos = t.transform.position + Vector3.up * 1.2f;
+                _autoStartPosValid = true;
+            }
+        }
+
+        // Create a generous trigger volume covering the whole floor so any entry registers a checkpoint.
+        var relayGO = new GameObject("_S13_CheckpointRelay");
+        relayGO.transform.SetParent(transform, false);
+        var box = relayGO.AddComponent<BoxCollider>();
+        box.isTrigger = true;
+        // Size in local units: cover the grid + a tall vertical band so the player triggers on entry.
+        box.size = new Vector3(cols + 2f, 6f, rows + 2f);
+        box.center = new Vector3(0f, 2f, 0f);
+        var relay = relayGO.AddComponent<_FloorCheckpointRelay>();
+        relay.generator = this;
+    }
+
+    public Vector3 GetStartPosition()
+    {
+        if (sectionStartPoint != null) return sectionStartPoint.position;
+        if (_autoStartPosValid) return _autoStartPos;
+        return transform.position + Vector3.up * 1.2f;
+    }
+
 
     /// <summary>
     /// Public — clears existing key + bullet traps + materials, then
@@ -54,7 +106,13 @@ public class CheckboxFloorGenerator : MonoBehaviour
     /// </summary>
     public void Regenerate()
     {
+        if (_skipGeneration)
+        {
+            if (_nestedGenerator != null) _nestedGenerator.Regenerate();
+            return;
+        }
         if (_tiles.Count == 0) CollectTiles();
+        if (_tiles.Count == 0) { Debug.LogWarning($"[CheckboxFloor] No grid tiles found under {name}."); return; }
 
         // Wipe previous key (key may have been picked up already — handle null)
         if (_spawnedKey != null) { Destroy(_spawnedKey); _spawnedKey = null; }
@@ -74,7 +132,19 @@ public class CheckboxFloorGenerator : MonoBehaviour
     {
         _tiles.Clear();
         foreach (Transform child in transform)
-            _tiles.Add(child.gameObject);
+            if (IsGridTile(child.gameObject)) _tiles.Add(child.gameObject);
+    }
+
+    CheckboxFloorGenerator FindNestedFloorGenerator()
+    {
+        foreach (var gen in GetComponentsInChildren<CheckboxFloorGenerator>(true))
+            if (gen != this) return gen;
+        return null;
+    }
+
+    bool IsGridTile(GameObject tile)
+    {
+        return tile.GetComponent<Collider>() != null && tile.name.StartsWith("Tile_");
     }
 
     Vector2Int TileCoord(GameObject tile)
@@ -214,10 +284,16 @@ public class CheckboxFloorGenerator : MonoBehaviour
             var coord = TileCoord(tile);
             bool isSafe = _safeCoords.Contains(coord);
 
+            // Strip any kill-volume we parented under this tile in a previous
+            // regen — otherwise a tile that just became "safe" would still kill.
+            var oldKill = tile.transform.Find("_TrapKillVolume");
+            if (oldKill != null) Destroy(oldKill.gameObject);
+
             if (isSafe) {
                 tile.tag = "SafeTile";
                 var bt = tile.GetComponent<BulletTrap>();
                 if (bt != null) Destroy(bt);
+                // Safe tiles must be SOLID — the player walks on them.
                 var safeCol = tile.GetComponent<Collider>();
                 if (safeCol != null) safeCol.isTrigger = false;
                 if (safeTileMat != null) {
@@ -230,9 +306,34 @@ public class CheckboxFloorGenerator : MonoBehaviour
                 }
             } else {
                 tile.tag = "TrapTile";
+                // The tile's own collider becomes a (non-blocking) trigger so the
+                // player falls through it instead of standing on top.
                 var col = tile.GetComponent<Collider>();
                 if (col != null) col.isTrigger = true;
                 if (tile.GetComponent<BulletTrap>() == null) tile.AddComponent<BulletTrap>();
+
+                // Tiles are extremely flat (local Y scale ~0.05). A 1x1x1 box
+                // trigger only covers a ~0.05-unit-tall band so the player capsule,
+                // when standing on an adjacent safe tile at the same height,
+                // rarely overlaps it and the kill never fires. Spawn a tall
+                // world-space kill volume that fully covers the column above the
+                // tile so any step into this XZ footprint dies immediately.
+                var killGO = new GameObject("_TrapKillVolume");
+                killGO.transform.SetParent(tile.transform, false);
+                // Counteract parent's tiny Y scale so the volume is tall in world units.
+                Vector3 parentScale = tile.transform.lossyScale;
+                float invY = parentScale.y > 0.0001f ? 1f / parentScale.y : 1f;
+                killGO.transform.localScale = new Vector3(1f, invY, 1f);
+                var killBox = killGO.AddComponent<BoxCollider>();
+                killBox.isTrigger = true;
+                // 1 unit wide/deep (tile footprint) and 4 units tall in WORLD units,
+                // centered ~2 units above the tile surface — player capsule overlaps
+                // it the moment they step in.
+                killBox.size = new Vector3(0.98f, 4f, 0.98f);
+                killBox.center = new Vector3(0f, 2f, 0f);
+                var kt = killGO.AddComponent<BulletTrap>();
+                kt.sectionId = sectionId;
+
                 if (trapTileMat != null) {
                     var mr = tile.GetComponent<MeshRenderer>();
                     if (mr != null) mr.material = trapTileMat;
@@ -249,8 +350,13 @@ public class CheckboxFloorGenerator : MonoBehaviour
         var keyTile = TileAt(_keyCoord);
         if (keyTile == null) { Debug.LogWarning($"[CheckboxFloor] no tile at {_keyCoord}"); return; }
         Vector3 pos = keyTile.transform.position + Vector3.up * keyHeightOffset;
-        Transform parent = keyParent != null ? keyParent : transform.parent;
+        Transform parent = keyParent != null ? keyParent : transform;
         _spawnedKey = Instantiate(keyPrefab, pos, Quaternion.identity, parent);
+        foreach (var pickup in _spawnedKey.GetComponentsInChildren<KeyPickup>(true))
+        {
+            pickup.destroyTargetOverride = _spawnedKey.transform;
+            pickup.destroyRoot = false;
+        }
         Debug.Log($"[CheckboxFloor] key spawned at {_keyCoord} pos {pos}");
     }
 
@@ -268,5 +374,21 @@ public class CheckboxFloorGenerator : MonoBehaviour
         Gizmos.color = Color.yellow;
         var k = TileAt(_keyCoord);
         if (k != null) Gizmos.DrawWireSphere(k.transform.position + Vector3.up * 0.6f, 0.4f);
+    }
+}
+
+/// <summary>Auto-created at runtime by CheckboxFloorGenerator. Registers a checkpoint
+/// at the section start when the player enters the floor area, so trap deaths
+/// (via BulletTrap) respawn them at the maze entry instead of Room 1 start.</summary>
+public class _FloorCheckpointRelay : MonoBehaviour
+{
+    public CheckboxFloorGenerator generator;
+
+    void OnTriggerEnter(Collider other)
+    {
+        if (generator == null || !other.CompareTag("Player")) return;
+        var hp = other.GetComponent<PlayerHealth>();
+        if (hp == null) return;
+        hp.RegisterCheckpoint(generator.GetStartPosition(), generator.sectionId);
     }
 }

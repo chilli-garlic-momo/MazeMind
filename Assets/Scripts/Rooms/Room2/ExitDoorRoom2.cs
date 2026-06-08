@@ -28,6 +28,16 @@ public class ExitDoorRoom2 : MonoBehaviour
     bool _hadDummyKey;
     float _nextProbeTime;
 
+    void Awake()
+    {
+        AutoFindDacoitIfNeeded();
+    }
+
+    void Start()
+    {
+        AutoFindDacoitIfNeeded();
+    }
+
     public void NotifyDummyKeyCollected() => _hadDummyKey = true;
 
     void Update()
@@ -53,23 +63,37 @@ public class ExitDoorRoom2 : MonoBehaviour
             if (hits[i].CompareTag("Player"))
             {
                 if (verboseLogs) Debug.Log("[ExitDoorRoom2] Player in range — TryOpen()");
-                TryOpen();
+                TryOpen(hits[i].gameObject);
                 return;
             }
         }
     }
 
-    public void TryOpen()
+    public void TryOpen(GameObject player = null)
     {
         if (_opened) return;
 
         GameManager.EnsureExists();
         bool hasKey      = GameManager.Instance != null && GameManager.Instance.hasKey;
-        bool dacoitGone  = dacoit == null || !dacoit.gameObject.activeSelf;
+        AutoFindDacoitIfNeeded();
+        bool dacoitGone  = dacoit == null || dacoit.IsCleared;
 
         if (verboseLogs)
             Debug.Log($"[ExitDoorRoom2] TryOpen: hasKey={hasKey}, dacoitGone={dacoitGone}, " +
                       $"dacoit={(dacoit==null?"null":dacoit.name)}, nextScene='{nextSceneName}'");
+
+        if (!dacoitGone && dacoit != null)
+        {
+            if (player == null)
+            {
+                var foundPlayer = GameObject.FindWithTag("Player");
+                if (foundPlayer != null) player = foundPlayer;
+            }
+
+            dacoitGone = dacoit.TryResolveForPlayer(player, "ExitDoor");
+            if (dacoitGone && verboseLogs)
+                Debug.Log("[ExitDoorRoom2] Dacoit accepted payment during door check — opening exit.");
+        }
 
         if (!hasKey)
         {
@@ -83,7 +107,7 @@ public class ExitDoorRoom2 : MonoBehaviour
         {
             int demand = dacoit.gemDemand;
             int have   = GameManager.Instance != null ? GameManager.Instance.gems : 0;
-            Log($"You are {Mathf.Max(0, demand - have)} short. The maze remembers.",
+            Log($"You are {Mathf.Max(0, demand - have)} short. The maze sends you back.",
                 "Dacoit still blocking.");
             return;
         }
@@ -167,8 +191,16 @@ public class ExitDoorRoom2 : MonoBehaviour
         if (other.CompareTag("Player"))
         {
             if (verboseLogs) Debug.Log("[ExitDoorRoom2] OnTriggerEnter by Player");
-            TryOpen();
+            TryOpen(other.gameObject);
         }
+    }
+
+    void AutoFindDacoitIfNeeded()
+    {
+        if (dacoit != null) return;
+#pragma warning disable 0618
+        dacoit = FindObjectOfType<DacoitRoom2>();
+#pragma warning restore 0618
     }
 
     void OnDrawGizmosSelected()
