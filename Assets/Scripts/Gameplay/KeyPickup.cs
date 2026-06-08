@@ -15,9 +15,21 @@ public class KeyPickup : MonoBehaviour
     public bool autoCreateVisibleMarker = true;
 
     bool _collected;
+    bool _invalidContainerPickup;
 
     void Awake()
     {
+        // Safety guard for scene mistakes: if this script is placed on a room / section
+        // container (for example Section_1_5), collecting it would destroy that whole
+        // hierarchy and make the player fall through the missing floor. Real keys are
+        // small pickup objects, not protected scene containers.
+        if (destroyTargetOverride == null && IsProtectedAncestor(transform))
+        {
+            _invalidContainerPickup = true;
+            Debug.LogWarning($"[KeyPickup] Disabled unsafe pickup on protected container '{name}'. Move KeyPickup to the actual key object instead.");
+            return;
+        }
+
         EnsureTriggerCollider();
         EnsureVisibleMarker();
     }
@@ -61,6 +73,7 @@ public class KeyPickup : MonoBehaviour
 
     void OnTriggerEnter(Collider other)
     {
+        if (_invalidContainerPickup) return;
         if (_collected) return;
         if (!other.CompareTag("Player")) return;
 
@@ -87,6 +100,7 @@ public class KeyPickup : MonoBehaviour
     {
         if (destroyTargetOverride != null) return destroyTargetOverride.gameObject;
         if (!destroyRoot) return gameObject;
+        if (IsProtectedAncestor(transform)) return gameObject;
 
         // IMPORTANT: transform.root is unsafe for spawned keys parented under a room/section.
         // It can destroy the whole Section_1_3 hierarchy, making the floor vanish and the
