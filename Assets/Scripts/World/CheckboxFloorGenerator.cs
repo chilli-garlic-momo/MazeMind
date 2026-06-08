@@ -284,10 +284,16 @@ public class CheckboxFloorGenerator : MonoBehaviour
             var coord = TileCoord(tile);
             bool isSafe = _safeCoords.Contains(coord);
 
+            // Strip any kill-volume we parented under this tile in a previous
+            // regen — otherwise a tile that just became "safe" would still kill.
+            var oldKill = tile.transform.Find("_TrapKillVolume");
+            if (oldKill != null) Destroy(oldKill.gameObject);
+
             if (isSafe) {
                 tile.tag = "SafeTile";
                 var bt = tile.GetComponent<BulletTrap>();
                 if (bt != null) Destroy(bt);
+                // Safe tiles must be SOLID — the player walks on them.
                 var safeCol = tile.GetComponent<Collider>();
                 if (safeCol != null) safeCol.isTrigger = false;
                 if (safeTileMat != null) {
@@ -300,9 +306,34 @@ public class CheckboxFloorGenerator : MonoBehaviour
                 }
             } else {
                 tile.tag = "TrapTile";
+                // The tile's own collider becomes a (non-blocking) trigger so the
+                // player falls through it instead of standing on top.
                 var col = tile.GetComponent<Collider>();
                 if (col != null) col.isTrigger = true;
                 if (tile.GetComponent<BulletTrap>() == null) tile.AddComponent<BulletTrap>();
+
+                // Tiles are extremely flat (local Y scale ~0.05). A 1x1x1 box
+                // trigger only covers a ~0.05-unit-tall band so the player capsule,
+                // when standing on an adjacent safe tile at the same height,
+                // rarely overlaps it and the kill never fires. Spawn a tall
+                // world-space kill volume that fully covers the column above the
+                // tile so any step into this XZ footprint dies immediately.
+                var killGO = new GameObject("_TrapKillVolume");
+                killGO.transform.SetParent(tile.transform, false);
+                // Counteract parent's tiny Y scale so the volume is tall in world units.
+                Vector3 parentScale = tile.transform.lossyScale;
+                float invY = parentScale.y > 0.0001f ? 1f / parentScale.y : 1f;
+                killGO.transform.localScale = new Vector3(1f, invY, 1f);
+                var killBox = killGO.AddComponent<BoxCollider>();
+                killBox.isTrigger = true;
+                // 1 unit wide/deep (tile footprint) and 4 units tall in WORLD units,
+                // centered ~2 units above the tile surface — player capsule overlaps
+                // it the moment they step in.
+                killBox.size = new Vector3(0.98f, 4f, 0.98f);
+                killBox.center = new Vector3(0f, 2f, 0f);
+                var kt = killGO.AddComponent<BulletTrap>();
+                kt.sectionId = sectionId;
+
                 if (trapTileMat != null) {
                     var mr = tile.GetComponent<MeshRenderer>();
                     if (mr != null) mr.material = trapTileMat;

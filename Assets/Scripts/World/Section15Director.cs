@@ -89,16 +89,17 @@ public class Section15Director : MonoBehaviour
 
     void Update()
     {
-        // If player is inside 1.5 WITHOUT the key and starts falling off an
-        // edge (e.g. the pit next to the dacoit), don't wait for the dacoit
-        // trigger or for PlayerHealth's 200-unit safety net — bounce them
-        // back to Spawn_1_1 immediately. This is what makes 1.5 actually
-        // beatable when the player tries to sneak past without the key.
+        // If player is inside 1.5 without the full dacoit criteria (real key
+        // AND enough gems) and starts falling off an edge, bounce them back to
+        // Spawn_1_1 immediately. If criteria are met, never bounce/respawn.
         if (!_playerInside || _bouncing || _playerT == null || spawn_1_1 == null) return;
         if (!_entryPosValid) return;
 
         var gm = GameManager.Instance;
-        if (gm != null && gm.hasKey) return; // has key → no bounce, just normal play
+        int demand = dacoit != null ? dacoit.gemDemand : 0;
+        bool dacoitCleared = dacoit == null || !dacoit.gameObject.activeSelf;
+        if (dacoitCleared) return; // already paid/cleared → never bounce
+        if (gm != null && gm.hasKey && gm.gems >= demand) return; // criteria met → normal play
 
         if (_playerT.position.y < _entryPos.y - 5f)
         {
@@ -123,8 +124,8 @@ public class Section15Director : MonoBehaviour
         if (hp != null) hp.RegisterCheckpoint(spawn_1_1.position, "1.1");
 
         DecisionLogger.I?.Log("Section15FallBounce", "1.5", "NoKeyFall",
-            "The maze sends you back. Find the key first.",
-            "Player fell in Section 1.5 without the key; bounced to Spawn_1_1.");
+            "The maze sends you back. Bring the key and enough gems.",
+            "Player fell in Section 1.5 without full dacoit criteria; bounced to Spawn_1_1.");
 
         yield return new WaitForSeconds(0.4f);
 

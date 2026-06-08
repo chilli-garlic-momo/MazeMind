@@ -20,6 +20,8 @@ public class DacoitRoom2 : MonoBehaviour
     bool _paid;
     bool _respawningNoKey;
 
+    public bool IsCleared => _paid || !gameObject.activeSelf;
+
     void Awake()
     {
         GameManager.EnsureExists();
@@ -48,20 +50,30 @@ public class DacoitRoom2 : MonoBehaviour
     {
         if (_paid || _respawningNoKey || !other.CompareTag("Player")) return;
 
+        TryResolveForPlayer(other.gameObject, "DacoitTrigger");
+    }
+
+    public bool TryResolveForPlayer(GameObject player, string source = "DacoitResolve")
+    {
+        if (_paid || !gameObject.activeSelf) return true;
+        if (_respawningNoKey) return false;
+
         var gm = GameManager.EnsureExists();
 
-        if (!gm.hasKey)
+        bool hasKey = gm.hasKey;
+        int have = gm.gems;
+
+        if (!hasKey)
         {
             _respawningNoKey = true;
             SetDemandLabel("Go find the key first.");
             DecisionLogger.I?.Log("DacoitNoKey", "1.5", "DacoitBlocked",
                 "Go find the key first.",
-                "Player reached dacoit without the key. Respawning at Room 1 start.");
-            StartCoroutine(RespawnToStart(other.gameObject));
-            return;
+                $"Player reached dacoit without the key via {source}. Respawning at Room 1 start.");
+            if (player != null) StartCoroutine(RespawnToStart(player));
+            return false;
         }
 
-        int have = gm.gems;
         int shortBy = Mathf.Max(0, gemDemand - have);
 
         if (have >= gemDemand)
@@ -73,13 +85,17 @@ public class DacoitRoom2 : MonoBehaviour
                 "Smart. You listened.",
                 $"Player paid {gemDemand} gems. Remaining: {gm.gems}");
             gameObject.SetActive(false);
+            return true;
         }
         else
         {
+            _respawningNoKey = true;
             SetDemandLabel($"Not enough.\nYou are {shortBy} short.");
             DecisionLogger.I?.Log("DacoitBlocked", "1.5", "DacoitDenied",
-                $"You are {shortBy} short. The maze remembers.",
-                $"Player has {have}, needs {gemDemand}. Blocked.");
+                $"You are {shortBy} short. The maze sends you back.",
+                $"Player has key but only {have}/{gemDemand} gems via {source}. Respawning at Room 1 start.");
+            if (player != null) StartCoroutine(RespawnToStart(player));
+            return false;
         }
     }
 
