@@ -7,6 +7,7 @@ public class GhostController : MonoBehaviour {
     public float dpsContact = 15f;
 
     void Update() {
+        if (AIDirector.I == null || AIDirector.I.state == null) return;
         if (agent == null || player == null) return;
         float mult = AIDirector.I?.state?.hazardSpeedMultiplier ?? 1f;
         agent.speed = baseSpeed * mult;

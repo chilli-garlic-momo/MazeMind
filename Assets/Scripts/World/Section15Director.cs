@@ -10,7 +10,7 @@ public class Section15Director : MonoBehaviour
     [Header("Refs (optional — auto-found if empty)")]
     public DacoitRoom2 dacoit;
     public ExitDoorRoom2 exitDoor;
-
+    GameObject _currentGhost;
     [Header("No-key respawn target (Room 1 start)")]
     public Transform spawn_1_1;
 
