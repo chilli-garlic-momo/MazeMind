@@ -9310,6 +9310,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::KeyPickup
   destroyRoot: 1
+  destroyTargetOverride: {fileID: 0}
+  maxDestroyParentHops: 2
+  autoCreateVisibleMarker: 1
 --- !u!65 &1044020235
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -11228,6 +11231,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::KeyPickup
   destroyRoot: 1
+  destroyTargetOverride: {fileID: 0}
+  maxDestroyParentHops: 2
+  autoCreateVisibleMarker: 1
 --- !u!65 &1337115593
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -11315,7 +11321,7 @@ Transform:
   m_GameObject: {fileID: 1337115591}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0.63, y: 1, z: -2.27}
+  m_LocalPosition: {x: 6.4, y: 1, z: -4.43}
   m_LocalScale: {x: 0.3, y: 0.3, z: 0.3}
   m_ConstrainProportionsScale: 0
   m_Children: []

@@ -66,7 +66,17 @@ public class Section15Director : MonoBehaviour
         if (!other.CompareTag("Player")) return;
         _playerInside = true;
         if (_playerHp == null) FindPlayer();
-        ApplyNoKeyCheckpointIfNeeded();
+
+        // Register a LOCAL checkpoint at the section entry so the PlayerHealth
+        // safety-net (kill-below-checkpoint-Y) measures from inside 1.5 rather
+        // than from Spawn_1_1, which is far above and would insta-kill the
+        // player on entry. The Dacoit handles the actual "no key -> bounce
+        // back to Spawn_1_1" behaviour on contact; we should NOT continuously
+        // re-bind the checkpoint to Spawn_1_1 here.
+        if (_playerHp != null)
+        {
+            _playerHp.RegisterCheckpoint(other.transform.position, "1.5");
+        }
     }
 
     void OnTriggerExit(Collider other)
@@ -77,21 +87,11 @@ public class Section15Director : MonoBehaviour
 
     void Update()
     {
-        // Only override checkpoint while the player is physically inside 1.5
-        // AND has no key. Keeps 1.3 (and every other section) untouched.
-        if (!_playerInside) return;
-        ApplyNoKeyCheckpointIfNeeded();
+        // Intentionally empty. Earlier versions re-bound the checkpoint to
+        // Spawn_1_1 every frame while inside 1.5, which made the safety-net
+        // kill fire instantly because 1.5 sits well below Spawn_1_1.Y.
     }
 
-    void ApplyNoKeyCheckpointIfNeeded()
-    {
-        if (_playerHp == null || spawn_1_1 == null) return;
-        var gm = GameManager.Instance;
-        if (gm == null || gm.hasKey) return;
-
-        _playerHp.RegisterCheckpoint(spawn_1_1.position, "1.1");
-        if (_playerHp.fallbackSpawn == null) _playerHp.fallbackSpawn = spawn_1_1;
-    }
 
     void FindPlayer()
     {
