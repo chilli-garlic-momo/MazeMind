@@ -12,7 +12,12 @@ public class Bootstrap : MonoBehaviour {
             SceneManager.LoadScene(firstRoom);
             return;
         }
-        SceneManager.LoadScene(bootScene, LoadSceneMode.Additive);
-        SceneManager.LoadScene(firstRoom);
-    }
+        // If AIDirector already exists, Boot already ran — skip straight to the room
+        if (MazeMind.Core.AIDirector.I != null) {
+            SceneManager.LoadScene(firstRoom);
+            return;
+        }
+        SceneManager.LoadScene(bootScene);  // Boot scene's own Awake will load Room1
+
+            }
 }

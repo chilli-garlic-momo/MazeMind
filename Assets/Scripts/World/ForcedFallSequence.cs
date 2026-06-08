@@ -38,6 +38,10 @@ public class ForcedFallSequence : MonoBehaviour {
     }
 
     IEnumerator Run(Transform player) {
+        // if (screamSfx == null || fadeToBlack == null) {
+        //     Debug.LogError("[ForcedFallSequence] Missing refs");
+        //     yield break;
+        // }
         var hp = player.GetComponent<PlayerHealth>();
 
         // Suppress safety-net killBelowY while the player is mid-cinematic.
