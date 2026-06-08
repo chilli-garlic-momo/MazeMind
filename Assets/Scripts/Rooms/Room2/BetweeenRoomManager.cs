@@ -1,4 +1,4 @@
-// File: BetweenRoomManager.cs
+// File: BetweenRoomManager.cs — PATCHED (guards against double-fire)
 using System.Collections; using System.Text;
 using TMPro; using UnityEngine; using UnityEngine.SceneManagement;
 using MazeMind.Core;
@@ -16,14 +16,33 @@ public class BetweenRoomManager : MonoBehaviour {
     [Header("Timing")]
     public float displaySeconds = 6f;
 
+    bool _loading; // NEW: prevents multiple ShowScreen calls from queueing extra scene loads
+
     void Awake() {
         if (I != null) { Destroy(gameObject); return; }
         I = this;
         DontDestroyOnLoad(gameObject);
         if (screen != null) screen.SetActive(false);
+        SceneManager.sceneLoaded += OnSceneLoaded;
+    }
+
+    void OnDestroy() {
+        SceneManager.sceneLoaded -= OnSceneLoaded;
+    }
+
+    // Reset the guard when a new scene actually finishes loading so future
+    // transitions (e.g. Play Again) still work.
+    void OnSceneLoaded(Scene s, LoadSceneMode mode) {
+        _loading = false;
+        if (screen != null) screen.SetActive(false);
     }
 
     public void ShowScreen(string nextScene) {
+        if (_loading) {
+            Debug.Log($"[BetweenRoomManager] Ignoring duplicate ShowScreen({nextScene}); already loading.");
+            return;
+        }
+        _loading = true;
         if (screen != null) screen.SetActive(true);
         PopulateUI();
         StartCoroutine(LoadAfterDelay(nextScene));

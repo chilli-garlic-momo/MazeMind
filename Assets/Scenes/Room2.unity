@@ -2724,6 +2724,12 @@ MonoBehaviour:
   smallDoor: {fileID: 571230424}
   openAngle: 90
   openDuration: 0.5
+  autoOpenRadius: 2.5
+  playerMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  verboseLogs: 1
+  forceOpenKey: 283
 --- !u!1 &821221232
 GameObject:
   m_ObjectHideFlags: 0
@@ -6439,7 +6445,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4c826efc5dfec2046bae1cc9a16b280c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DoorInteractable
-  nextSceneName: Room2
+  nextSceneName: Room3
   useBetweenRoomScreen: 1
 --- !u!65 &1796597064
 BoxCollider:
@@ -6528,6 +6534,12 @@ MonoBehaviour:
   smallDoor: {fileID: 0}
   openAngle: 90
   openDuration: 0.5
+  autoOpenRadius: 2.5
+  playerMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  verboseLogs: 1
+  forceOpenKey: 283
 --- !u!1 &1798944389
 GameObject:
   m_ObjectHideFlags: 0
@@ -6851,7 +6863,7 @@ MonoBehaviour:
   invulnSecondsAfterRespawn: 1
   fallbackSpawn: {fileID: 0}
   fallbackSectionId: 1.1
-  killBelowY: -15
+  killBelowOffsetFromCheckpoint: 20
   OnHealthChanged:
     m_PersistentCalls:
       m_Calls: []
