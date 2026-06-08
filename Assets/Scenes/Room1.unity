@@ -4881,7 +4881,7 @@ MonoBehaviour:
   invulnSecondsAfterRespawn: 1
   fallbackSpawn: {fileID: 1596387116}
   fallbackSectionId: 1.1
-  killBelowY: -15
+  killBelowOffsetFromCheckpoint: 20
   OnHealthChanged:
     m_PersistentCalls:
       m_Calls: []
@@ -15997,10 +15997,15 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ExitDoorRoom2
   dacoit: {fileID: 0}
   nextSceneName: Room2
-  solidBlocker: {fileID: 1646528757}
   smallDoor: {fileID: 0}
   openAngle: 90
   openDuration: 0.5
+  autoOpenRadius: 2.5
+  playerMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  verboseLogs: 1
+  forceOpenKey: 283
 --- !u!65 &1950320956
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -16150,6 +16155,7 @@ MonoBehaviour:
   fadeToBlack: {fileID: 139764601}
   fadeOutSeconds: 1.2
   fadeInSeconds: 1
+  postTeleportInvulnSeconds: 1.5
 --- !u!1 &1974379847
 GameObject:
   m_ObjectHideFlags: 0
