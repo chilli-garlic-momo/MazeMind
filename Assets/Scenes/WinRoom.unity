@@ -271,7 +271,7 @@ GameObject:
   - component: {fileID: 91832948}
   - component: {fileID: 91832947}
   m_Layer: 5
-  m_Name: WinScreen
+  m_Name: Canvas
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -473,7 +473,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0e4239bdc4309fc4ca56baee22f02fd0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::WinScreen
-  firstLevelScene: MainMenu
+  firstLevelScene: Boot
   profileTitleText: {fileID: 237161520}
   profileDescriptionText: {fileID: 399460133}
   timelineText: {fileID: 1360082118}
