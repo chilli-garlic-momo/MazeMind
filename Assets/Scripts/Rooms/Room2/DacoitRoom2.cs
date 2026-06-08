@@ -85,25 +85,40 @@ public class DacoitRoom2 : MonoBehaviour
 
     System.Collections.IEnumerator RespawnToStart(GameObject player)
     {
-        yield return new WaitForSeconds(respawnDelay);
+        // Freeze + protect the player IMMEDIATELY so they can't walk off the
+        // ledge next to the dacoit (or get killed by a nearby PitDeathTrigger)
+        // during the respawnDelay wait. Previously the player kept moving
+        // forward during the 1.5s wait, fell into the pit beside the dacoit,
+        // and got pit-killed back to the wrong checkpoint — making 1.5
+        // unbeatable without the key.
+        var hp = player.GetComponent<PlayerHealth>();
+        var cc = player.GetComponent<CharacterController>();
+        var controller = player.GetComponent("PlayerController") as MonoBehaviour;
+
+        if (hp != null) hp.SetInvulnerable(true);
+        if (controller != null) controller.enabled = false;
+        if (cc != null) cc.enabled = false;
 
         AutoFindRespawnTargetIfNeeded(player);
 
-        var hp = player.GetComponent<PlayerHealth>();
-        var cc = player.GetComponent<CharacterController>();
-
+        // Snap to respawn target right away so the player visually stays put
+        // (or fades to start) instead of physically falling into the pit.
         if (respawnIfNoKey != null)
         {
-            if (hp != null) hp.RegisterCheckpoint(respawnIfNoKey.position, respawnSectionId);
-            if (cc != null) cc.enabled = false;
             player.transform.position = respawnIfNoKey.position;
             player.transform.rotation = respawnIfNoKey.rotation;
-            if (cc != null) cc.enabled = true;
+            if (hp != null) hp.RegisterCheckpoint(respawnIfNoKey.position, respawnSectionId);
         }
         else
         {
             Debug.LogWarning("[DacoitRoom2] No respawn target found. Create Spawn_1_1 or assign respawnIfNoKey.");
         }
+
+        yield return new WaitForSeconds(respawnDelay);
+
+        if (cc != null) cc.enabled = true;
+        if (controller != null) controller.enabled = true;
+        if (hp != null) hp.SetInvulnerable(false);
 
         _respawningNoKey = false;
         RefreshLabel();

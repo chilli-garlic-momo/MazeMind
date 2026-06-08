@@ -14,10 +14,8 @@ public class PlayerHealth : MonoBehaviour {
     public string fallbackSectionId = "1.1";
 
     [Header("Safety net")]
-    [Tooltip("If the player ever falls more than this far BELOW the current checkpoint Y, kill them. " +
-             "Was an absolute world Y in earlier versions — now relative to the active checkpoint so " +
-             "sections built far below the maze (e.g. 1.5) don't false-trigger the kill.")]
-    public float killBelowOffsetFromCheckpoint = 20f;
+    [Tooltip("Safety-net kill threshold (relative to active checkpoint Y). Set huge so only real void-falls trigger; trap deaths are handled by BulletTrap / PitDeathTrigger.")]
+    public float killBelowOffsetFromCheckpoint = 200f;
 
     [System.Serializable] public class HealthEvent : UnityEvent<int,int> {}
     public HealthEvent OnHealthChanged;

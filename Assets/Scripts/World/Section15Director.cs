@@ -61,6 +61,10 @@ public class Section15Director : MonoBehaviour
         }
     }
 
+    Vector3 _entryPos;
+    bool _entryPosValid;
+    bool _bouncing;
+
     void OnTriggerEnter(Collider other)
     {
         if (!other.CompareTag("Player")) return;
@@ -68,14 +72,12 @@ public class Section15Director : MonoBehaviour
         if (_playerHp == null) FindPlayer();
 
         // Register a LOCAL checkpoint at the section entry so the PlayerHealth
-        // safety-net (kill-below-checkpoint-Y) measures from inside 1.5 rather
-        // than from Spawn_1_1, which is far above and would insta-kill the
-        // player on entry. The Dacoit handles the actual "no key -> bounce
-        // back to Spawn_1_1" behaviour on contact; we should NOT continuously
-        // re-bind the checkpoint to Spawn_1_1 here.
+        // safety-net measures from inside 1.5 (not from Spawn_1_1 above).
+        _entryPos = other.transform.position;
+        _entryPosValid = true;
         if (_playerHp != null)
         {
-            _playerHp.RegisterCheckpoint(other.transform.position, "1.5");
+            _playerHp.RegisterCheckpoint(_entryPos, "1.5");
         }
     }
 
@@ -87,10 +89,52 @@ public class Section15Director : MonoBehaviour
 
     void Update()
     {
-        // Intentionally empty. Earlier versions re-bound the checkpoint to
-        // Spawn_1_1 every frame while inside 1.5, which made the safety-net
-        // kill fire instantly because 1.5 sits well below Spawn_1_1.Y.
+        // If player is inside 1.5 WITHOUT the key and starts falling off an
+        // edge (e.g. the pit next to the dacoit), don't wait for the dacoit
+        // trigger or for PlayerHealth's 200-unit safety net — bounce them
+        // back to Spawn_1_1 immediately. This is what makes 1.5 actually
+        // beatable when the player tries to sneak past without the key.
+        if (!_playerInside || _bouncing || _playerT == null || spawn_1_1 == null) return;
+        if (!_entryPosValid) return;
+
+        var gm = GameManager.Instance;
+        if (gm != null && gm.hasKey) return; // has key → no bounce, just normal play
+
+        if (_playerT.position.y < _entryPos.y - 5f)
+        {
+            StartCoroutine(BounceToStart());
+        }
     }
+
+    System.Collections.IEnumerator BounceToStart()
+    {
+        _bouncing = true;
+        var player = _playerT.gameObject;
+        var hp = _playerHp;
+        var cc = player.GetComponent<CharacterController>();
+        var controller = player.GetComponent("PlayerController") as MonoBehaviour;
+
+        if (hp != null) hp.SetInvulnerable(true);
+        if (controller != null) controller.enabled = false;
+        if (cc != null) cc.enabled = false;
+
+        player.transform.position = spawn_1_1.position;
+        player.transform.rotation = spawn_1_1.rotation;
+        if (hp != null) hp.RegisterCheckpoint(spawn_1_1.position, "1.1");
+
+        DecisionLogger.I?.Log("Section15FallBounce", "1.5", "NoKeyFall",
+            "The maze sends you back. Find the key first.",
+            "Player fell in Section 1.5 without the key; bounced to Spawn_1_1.");
+
+        yield return new WaitForSeconds(0.4f);
+
+        if (cc != null) cc.enabled = true;
+        if (controller != null) controller.enabled = true;
+        if (hp != null) hp.SetInvulnerable(false);
+
+        _bouncing = false;
+    }
+
 
 
     void FindPlayer()

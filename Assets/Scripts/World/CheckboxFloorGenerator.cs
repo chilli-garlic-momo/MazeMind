@@ -35,6 +35,12 @@ public class CheckboxFloorGenerator : MonoBehaviour
     public Color debugSafeColor = Color.green;
     public Material debugSafeMat;
 
+    [Header("Section start checkpoint")]
+    [Tooltip("Where the player respawns after dying on a trap tile. If empty, the first entryCoords tile is used.")]
+    public Transform sectionStartPoint;
+    [Tooltip("Section ID used when registering the checkpoint (must match BulletTrap.sectionId).")]
+    public string sectionId = "1.3";
+
     private List<GameObject> _tiles = new();
     private HashSet<Vector2Int> _safeCoords = new();
     private List<Vector2Int> _orderedPath = new();
@@ -42,6 +48,8 @@ public class CheckboxFloorGenerator : MonoBehaviour
     private GameObject _spawnedKey;
     private bool _skipGeneration;
     private CheckboxFloorGenerator _nestedGenerator;
+    private Vector3 _autoStartPos;
+    private bool _autoStartPosValid;
 
     void Start()
     {
@@ -55,7 +63,41 @@ public class CheckboxFloorGenerator : MonoBehaviour
 
         CollectTiles();
         Regenerate();
+        EnsureCheckpointTrigger();
     }
+
+    void EnsureCheckpointTrigger()
+    {
+        // Compute fallback start position from first entry tile if no explicit point assigned.
+        if (sectionStartPoint == null && entryCoords != null && entryCoords.Count > 0)
+        {
+            var t = TileAt(ClampToGrid(entryCoords[0]));
+            if (t != null)
+            {
+                _autoStartPos = t.transform.position + Vector3.up * 1.2f;
+                _autoStartPosValid = true;
+            }
+        }
+
+        // Create a generous trigger volume covering the whole floor so any entry registers a checkpoint.
+        var relayGO = new GameObject("_S13_CheckpointRelay");
+        relayGO.transform.SetParent(transform, false);
+        var box = relayGO.AddComponent<BoxCollider>();
+        box.isTrigger = true;
+        // Size in local units: cover the grid + a tall vertical band so the player triggers on entry.
+        box.size = new Vector3(cols + 2f, 6f, rows + 2f);
+        box.center = new Vector3(0f, 2f, 0f);
+        var relay = relayGO.AddComponent<_FloorCheckpointRelay>();
+        relay.generator = this;
+    }
+
+    public Vector3 GetStartPosition()
+    {
+        if (sectionStartPoint != null) return sectionStartPoint.position;
+        if (_autoStartPosValid) return _autoStartPos;
+        return transform.position + Vector3.up * 1.2f;
+    }
+
 
     /// <summary>
     /// Public — clears existing key + bullet traps + materials, then
@@ -301,5 +343,21 @@ public class CheckboxFloorGenerator : MonoBehaviour
         Gizmos.color = Color.yellow;
         var k = TileAt(_keyCoord);
         if (k != null) Gizmos.DrawWireSphere(k.transform.position + Vector3.up * 0.6f, 0.4f);
+    }
+}
+
+/// <summary>Auto-created at runtime by CheckboxFloorGenerator. Registers a checkpoint
+/// at the section start when the player enters the floor area, so trap deaths
+/// (via BulletTrap) respawn them at the maze entry instead of Room 1 start.</summary>
+public class _FloorCheckpointRelay : MonoBehaviour
+{
+    public CheckboxFloorGenerator generator;
+
+    void OnTriggerEnter(Collider other)
+    {
+        if (generator == null || !other.CompareTag("Player")) return;
+        var hp = other.GetComponent<PlayerHealth>();
+        if (hp == null) return;
+        hp.RegisterCheckpoint(generator.GetStartPosition(), generator.sectionId);
     }
 }
