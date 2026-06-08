@@ -4,15 +4,12 @@ public class GemPickup : MonoBehaviour
 {
     private void OnTriggerEnter(Collider other)
     {
-        if (other.CompareTag("Player"))
-        {
-            GameManager.Instance.gems++;
+        if (!other.CompareTag("Player")) return;
 
-            Debug.Log(
-                "Gems: " +
-                GameManager.Instance.gems);
+        var gm = GameManager.EnsureExists();
+        gm.AddGem();
 
-            Destroy(gameObject);
-        }
+        Debug.Log("Gems: " + gm.gems);
+        Destroy(gameObject);
     }
 }

@@ -10,8 +10,13 @@ public class DevPanelUI : MonoBehaviour {
 
     void Update() {
         if (Keyboard.current != null && Keyboard.current.backquoteKey.wasPressedThisFrame)
-            panel.SetActive(!panel.activeSelf);
-        if (!panel.activeSelf) return;
+            if (panel != null) panel.SetActive(!panel.activeSelf);
+
+        if (panel == null || !panel.activeSelf || body == null) return;
+        if (AIDirector.I == null || PlayerMetrics.I == null || DecisionLogger.I == null) {
+            body.text = "Boot scene not loaded — AIDirector/PlayerMetrics/DecisionLogger missing.";
+            return;
+        }
 
         var sb = new StringBuilder();
         var s = AIDirector.I.state; var m = PlayerMetrics.I;

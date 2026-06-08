@@ -870,56 +870,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 221138979}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &124938100
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 124938102}
-  - component: {fileID: 124938101}
-  m_Layer: 0
-  m_Name: PlayerMetrics
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &124938101
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 124938100}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7fb238ec10d04f9429babdb4ef3e04f0, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::MazeMind.Core.PlayerMetrics
-  avgMoveSpeed: 0
-  explorationPct: 0
-  avgHesitationSec: 0
-  damageTaken: 0
-  gemCollectionPct: 0
-  sectionsEntered: 0
---- !u!4 &124938102
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 124938100}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 3.41786, y: 0, z: -7.25971}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &133623837
 GameObject:
   m_ObjectHideFlags: 0
@@ -2774,6 +2724,12 @@ MonoBehaviour:
   smallDoor: {fileID: 571230424}
   openAngle: 90
   openDuration: 0.5
+  autoOpenRadius: 2.5
+  playerMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  verboseLogs: 1
+  forceOpenKey: 283
 --- !u!1 &821221232
 GameObject:
   m_ObjectHideFlags: 0
@@ -2993,6 +2949,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::DacoitRoom2
   gemDemand: 3
   demandLabel: {fileID: 1432824299}
+  respawnIfNoKey: {fileID: 0}
+  respawnSectionId: 1.1
+  respawnDelay: 1.5
 --- !u!1 &934907649
 GameObject:
   m_ObjectHideFlags: 0
@@ -4063,51 +4022,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerInteraction
   interactDistance: 3
---- !u!1 &1114186492
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1114186494}
-  - component: {fileID: 1114186493}
-  m_Layer: 0
-  m_Name: AIDirector
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!114 &1114186493
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1114186492}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 619954e883a64c74597545559e256844, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::MazeMind.Core.AIDirector
-  rules: []
---- !u!4 &1114186494
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1114186492}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 3.41786, y: 0, z: -7.25971}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1117748054
 GameObject:
   m_ObjectHideFlags: 0
@@ -5047,54 +4961,6 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 6507146629973954718, guid: 66c343ffcf8c1e54382b0630feca562f, type: 3}
   m_PrefabInstance: {fileID: 1336508862}
   m_PrefabAsset: {fileID: 0}
---- !u!1 &1389400571
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1389400572}
-  - component: {fileID: 1389400573}
-  m_Layer: 0
-  m_Name: GameManager
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &1389400572
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1389400571}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: 1, z: -0, w: 0}
-  m_LocalPosition: {x: -50.56982, y: 0, z: -96.431}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1389400573
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1389400571}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 086e1c264214f6c4cafec5b4a5fc8979, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::GameManager
-  gems: 0
-  hasKey: 0
-  health: 5
-  currentRoom: 1
 --- !u!1 &1413148643
 GameObject:
   m_ObjectHideFlags: 0
@@ -6708,6 +6574,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4c826efc5dfec2046bae1cc9a16b280c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::DoorInteractable
+  nextSceneName: Room3
+  useBetweenRoomScreen: 1
 --- !u!65 &1796597064
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -6795,6 +6663,12 @@ MonoBehaviour:
   smallDoor: {fileID: 0}
   openAngle: 90
   openDuration: 0.5
+  autoOpenRadius: 2.5
+  playerMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  verboseLogs: 1
+  forceOpenKey: 283
 --- !u!1 &1798944389
 GameObject:
   m_ObjectHideFlags: 0
@@ -7030,6 +6904,8 @@ GameObject:
   - component: {fileID: 1912584009}
   - component: {fileID: 1912584011}
   - component: {fileID: 1912584012}
+  - component: {fileID: 1912584014}
+  - component: {fileID: 1912584013}
   m_Layer: 0
   m_Name: Player
   m_TagString: Player
@@ -7065,11 +6941,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 91e1c66dff623ef4dbb37e7eec103e7c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerController
-  controller: {fileID: 1912584010}
   walkSpeed: 5
   sprintSpeed: 8
   jumpHeight: 1.5
+  doubleJumpHeight: 1
   gravity: -9.81
+  terminalVelocity: -50
+  mouseSensitivity: 0.2
+  cameraRig: {fileID: 0}
+  controller: {fileID: 1912584010}
 --- !u!143 &1912584010
 CharacterController:
   m_ObjectHideFlags: 0
@@ -7112,6 +6992,7 @@ MonoBehaviour:
   invulnSecondsAfterRespawn: 1
   fallbackSpawn: {fileID: 0}
   fallbackSectionId: 1.1
+  killBelowOffsetFromCheckpoint: 20
   OnHealthChanged:
     m_PersistentCalls:
       m_Calls: []
@@ -7142,6 +7023,31 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 0
   m_CollisionDetection: 0
+--- !u!114 &1912584013
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1912584007}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ca043bdef08e9064c99449faea614ed4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::MemoryTileDetector
+--- !u!114 &1912584014
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1912584007}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5b3863366bdbfc344a077d90932539d8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerInteraction
+  interactDistance: 3
 --- !u!1 &1948188308
 GameObject:
   m_ObjectHideFlags: 0
@@ -7869,9 +7775,6 @@ SceneRoots:
   - {fileID: 34492956}
   - {fileID: 469742504}
   - {fileID: 98201308}
-  - {fileID: 1114186494}
-  - {fileID: 1389400572}
-  - {fileID: 124938102}
   - {fileID: 644463695}
   - {fileID: 63948059}
   - {fileID: 221138979}

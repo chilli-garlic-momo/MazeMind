@@ -1,9 +1,13 @@
 using UnityEngine; using MazeMind.Core;
-// Put one of these as a child of _Triggers, with a Box Collider (Is Trigger ON).
-// Set sectionId in the Inspector ("1.1", "1.4", "1.3", "1.2", "1.5").
+// v11: added fireEverytime so the 1.3 trigger can re-fire on re-entry
+// (important when the player is bounced back from 1.5 for missing the key).
 public class SectionTrigger : MonoBehaviour {
     public string sectionId = "1.1";
     public int roomId = 1;
+    [Tooltip("If true, fires on every entry (use for 1.3 so re-entry re-registers checkpoint). If false, fires once.")]
+    public bool fireEverytime = false;
+    public bool oneShot = true;
+
     bool fired;
     void Reset() {
         var c = GetComponent<Collider>();
@@ -11,8 +15,8 @@ public class SectionTrigger : MonoBehaviour {
     }
     void OnTriggerEnter(Collider other) {
         if (!other.CompareTag("Player")) return;
-        if (fired) return;        // fire once per entry; remove this if you want re-entry
-        fired = true;
+        if (!fireEverytime && fired) return;
+        if (oneShot) fired = true;
         PlayerMetrics.I?.OnEnterSection(sectionId);
         AIDirector.I?.Fire(TriggerKind.OnSectionEnter, sectionId, roomId);
         var hp = other.GetComponent<PlayerHealth>();
